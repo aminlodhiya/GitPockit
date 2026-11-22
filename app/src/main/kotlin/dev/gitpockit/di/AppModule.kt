@@ -1,0 +1,51 @@
+package dev.gitpockit.di
+
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStore
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
+import dev.gitpockit.core.data.db.GitPockitDatabase
+import dev.gitpockit.core.data.repository.CredentialRepository
+import dev.gitpockit.core.data.repository.RepoRepository
+import dev.gitpockit.core.data.storage.StorageLocations
+import dev.gitpockit.core.git.GitEngine
+import dev.gitpockit.core.git.jgit.JGitEngine
+import dev.gitpockit.core.security.KeystoreSecretCipher
+import dev.gitpockit.core.security.SecretCipher
+import javax.inject.Singleton
+
+private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+
+@Module
+@InstallIn(SingletonComponent::class)
+object AppModule {
+
+    @Provides @Singleton
+    fun provideGitEngine(@ApplicationContext context: Context): GitEngine =
+        JGitEngine(appDataDir = context.filesDir.resolve("git-home"))
+
+    @Provides @Singleton
+    fun provideSettingsDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
+        context.settingsDataStore
+
+    @Provides @Singleton
+    fun provideDatabase(@ApplicationContext context: Context): GitPockitDatabase = GitPockitDatabase.create(context)
+
+    @Provides @Singleton
+    fun provideSecretCipher(): SecretCipher = KeystoreSecretCipher()
+
+    @Provides @Singleton
+    fun provideRepoRepository(db: GitPockitDatabase, engine: GitEngine): RepoRepository = RepoRepository(db, engine)
+
+    @Provides @Singleton
+    fun provideCredentialRepository(db: GitPockitDatabase, cipher: SecretCipher): CredentialRepository =
+        CredentialRepository(db.credentialDao(), cipher)
+
+    @Provides @Singleton
+    fun provideStorageLocations(@ApplicationContext context: Context): StorageLocations = StorageLocations(context)
+}

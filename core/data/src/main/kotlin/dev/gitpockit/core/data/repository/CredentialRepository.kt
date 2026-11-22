@@ -1,0 +1,106 @@
+package dev.gitpockit.core.data.repository
+
+import dev.gitpockit.core.data.db.CredentialDao
+import dev.gitpockit.core.data.db.CredentialEntity
+import dev.gitpockit.core.data.model.Credential
+import dev.gitpockit.core.data.model.CredentialType
+import dev.gitpockit.core.git.GitCredentials
+import dev.gitpockit.core.git.GitException
+import dev.gitpockit.core.git.SshKeys
+import dev.gitpockit.core.security.SecretCipher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
+
+/** Saved HTTPS tokens and SSH keys. Secrets are encrypted with [cipher] before they touch the database. */
+class CredentialRepository(
+    private val dao: CredentialDao,
+    private val cipher: SecretCipher,
+    private val clock: () -> Long = System::currentTimeMillis,
+) {
+    val credentials: Flow<List<Credential>> = dao.observeAll().map { list -> list.map { it.toModel() } }
+
+    suspend fun addHttps(label: String, username: String, token: String): Long {
+        require(token.isNotBlank()) { "Token must not be empty" }
+        val secret = withContext(Dispatchers.Default) { cipher.encrypt(token.toByteArray()) }
+        return dao.insert(
+            CredentialEntity(
+                label = label.trim().ifBlank { username.ifBlank { "HTTPS token" } },
+                type = CredentialType.HTTPS.name,
+                username = username.trim(),
+                secret = secret,
+                createdAt = clock(),
+            ),
+        )
+    }
+
+    /** Imports an existing private key. Throws [GitException] if it can't be read or the passphrase is wrong. */
+    suspend fun importSsh(label: String, privateKey: String, passphrase: String?): Long =
+        withContext(Dispatchers.Default) {
+            val keyBytes = normalizeKey(privateKey)
+            val info = SshKeys.inspect(keyBytes, passphrase?.ifEmpty { null }, comment = label)
+            insertSsh(label, keyBytes, passphrase?.ifEmpty { null }, info.publicKey, info.fingerprint)
+        }
+
+    /** Generates a new key pair on the device; the private key never leaves it. */
+    suspend fun generateSsh(label: String, type: SshKeys.Type): Credential =
+        withContext(Dispatchers.Default) {
+            val key = SshKeys.generate(type, comment = label.ifBlank { "gitpockit" })
+            val id = insertSsh(label, key.privateKey, null, key.publicKey, key.fingerprint)
+            checkNotNull(dao.get(id)).toModel()
+        }
+
+    suspend fun rename(id: Long, label: String) = dao.rename(id, label.trim())
+
+    suspend fun delete(id: Long) = dao.delete(id)
+
+    /** Decrypts the credential for a network operation. `null` id means anonymous access. */
+    suspend fun resolve(id: Long?): GitCredentials {
+        if (id == null) return GitCredentials.None
+        val entity = dao.get(id) ?: return GitCredentials.None
+        return withContext(Dispatchers.Default) {
+            val secret = runCatching { cipher.decrypt(entity.secret) }.getOrElse {
+                throw GitException("Saved credential \"${entity.label}\" can't be decrypted. Please add it again.", it)
+            }
+            when (CredentialType.valueOf(entity.type)) {
+                CredentialType.HTTPS -> GitCredentials.UserPassword(entity.username, String(secret))
+                CredentialType.SSH -> GitCredentials.SshKey(
+                    privateKey = secret,
+                    passphrase = entity.passphrase?.let { String(cipher.decrypt(it)) },
+                    username = entity.username,
+                )
+            }
+        }
+    }
+
+    private suspend fun insertSsh(label: String, key: ByteArray, passphrase: String?, publicKey: String, fingerprint: String): Long =
+        dao.insert(
+            CredentialEntity(
+                label = label.trim().ifBlank { "SSH key" },
+                type = CredentialType.SSH.name,
+                username = "git",
+                secret = cipher.encrypt(key),
+                passphrase = passphrase?.let { cipher.encrypt(it.toByteArray()) },
+                publicKey = publicKey,
+                fingerprint = fingerprint,
+                createdAt = clock(),
+            ),
+        )
+
+    private fun normalizeKey(text: String): ByteArray {
+        // Pasted keys often lose their trailing newline or gain Windows line endings.
+        val cleaned = text.trim().replace("\r\n", "\n")
+        if (cleaned.isEmpty()) throw GitException("Paste a private key")
+        return (cleaned + "\n").toByteArray()
+    }
+
+    private fun CredentialEntity.toModel() = Credential(
+        id = id,
+        label = label,
+        type = CredentialType.valueOf(type),
+        username = username,
+        publicKey = publicKey,
+        fingerprint = fingerprint,
+    )
+}
