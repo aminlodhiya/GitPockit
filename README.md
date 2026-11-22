@@ -4,7 +4,7 @@
 
 GitPockit is a free, open-source Git client for Android. Keep any folder on your phone — notes, an Obsidian vault, dotfiles, docs, code — in sync with a Git repository, and use the full power of Git from your phone.
 
-> Status: **early development (v0.3, Phase 2)**. Core Git features and automatic background sync work. Expect breaking changes.
+> Status: **early development (v0.4, Phase 3a)**. Core Git, automatic background sync and advanced Git operations work. Expect breaking changes.
 
 ## Features
 
@@ -14,7 +14,11 @@ GitPockit is a free, open-source Git client for Android. Keep any folder on your
 - Changes: stage / unstage single files or everything, discard changes, commit, amend
 - Diff viewer with line numbers for working-tree, staged and committed changes
 - History with commit details and per-file diffs
-- Branches: create, switch (including remote branches), rename, delete
+- Branches: create, switch (including remote branches), rename, delete, **merge** and **rebase**
+- **Stash** (save with message, include new files, apply, pop, drop), **tags** (lightweight/annotated, push, delete locally or on the remote, check out)
+- Commit actions: **cherry-pick**, **revert**, **reset** (soft / mixed / hard), check out a commit
+- **Reflog** to recover from mistakes; **pull with rebase** option per repository
+- One conflict resolver for merges, rebases, cherry-picks and reverts (continue or abort)
 - Remotes: add, edit URL, rename, delete, fetch, choose which one to sync with
 - Pull, push, fetch and one-tap **Sync** (commit → pull → push), ahead/behind and conflict indicators
 - Per-repo commit author and credential
@@ -25,7 +29,7 @@ GitPockit is a free, open-source Git client for Android. Keep any folder on your
 - Premium dark theme (default), simple light theme, AMOLED black, optional Material You colors
 
 **On the roadmap**
-- Branches, tags, remotes, stash, rebase, cherry-pick, revert, reset, blame, reflog, submodules, Git LFS
+- Blame, file history, commit graph, submodules, Git LFS
 - Hunk- and line-level staging, commit graph, diffs, file explorer and code editor
 - GitHub / GitLab / Gitea sign-in, issues, pull requests and CI runs
 - Signed commits, biometric lock, backup/restore

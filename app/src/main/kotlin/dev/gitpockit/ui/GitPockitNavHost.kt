@@ -20,7 +20,10 @@ import dev.gitpockit.ui.home.HomeScreen
 import dev.gitpockit.ui.repo.CommitScreen
 import dev.gitpockit.ui.repo.ConflictsScreen
 import dev.gitpockit.ui.repo.EditConflictScreen
+import dev.gitpockit.ui.repo.ReflogScreen
+import dev.gitpockit.ui.repo.StashesScreen
 import dev.gitpockit.ui.repo.SyncLogScreen
+import dev.gitpockit.ui.repo.TagsScreen
 import dev.gitpockit.ui.repo.DiffScreen
 import dev.gitpockit.ui.repo.RepoScreen
 import dev.gitpockit.ui.repo.RepoSettingsScreen
@@ -40,6 +43,9 @@ object Routes {
     const val CONFLICTS = "repo/{repoId}/conflicts"
     const val EDIT_CONFLICT = "repo/{repoId}/conflicts/edit?path={path}"
     const val SYNC_LOG = "repo/{repoId}/log"
+    const val STASHES = "repo/{repoId}/stashes"
+    const val TAGS = "repo/{repoId}/tags"
+    const val REFLOG = "repo/{repoId}/reflog"
 
     fun addRepo(create: Boolean) = "add?create=$create"
     fun repo(id: Long) = "repo/$id"
@@ -48,6 +54,9 @@ object Routes {
     fun conflicts(id: Long) = "repo/$id/conflicts"
     fun editConflict(id: Long, path: String) = "repo/$id/conflicts/edit?path=${Uri.encode(path)}"
     fun syncLog(id: Long) = "repo/$id/log"
+    fun stashes(id: Long) = "repo/$id/stashes"
+    fun tags(id: Long) = "repo/$id/tags"
+    fun reflog(id: Long) = "repo/$id/reflog"
     fun diff(id: Long, path: String, commit: String? = null, staged: Boolean = false) =
         "repo/$id/diff?path=${Uri.encode(path)}&commit=${commit.orEmpty()}&staged=$staged"
 }
@@ -127,6 +136,9 @@ fun GitPockitNavHost(deepLink: DeepLink? = null, onDeepLinkHandled: () -> Unit =
                 onOpenDiff = { path, staged -> nav.navigate(Routes.diff(id, path, staged = staged)) },
                 onOpenConflicts = { nav.navigate(Routes.conflicts(id)) },
                 onOpenLog = { nav.navigate(Routes.syncLog(id)) },
+                onOpenStashes = { nav.navigate(Routes.stashes(id)) },
+                onOpenTags = { nav.navigate(Routes.tags(id)) },
+                onOpenReflog = { nav.navigate(Routes.reflog(id)) },
             )
         }
         composable(Routes.REPO_SETTINGS, arguments = listOf(repoIdArg)) { entry ->
@@ -148,10 +160,26 @@ fun GitPockitNavHost(deepLink: DeepLink? = null, onDeepLinkHandled: () -> Unit =
         composable(Routes.SYNC_LOG, arguments = listOf(repoIdArg)) {
             SyncLogScreen(onBack = { nav.popBackStack() })
         }
+        composable(Routes.STASHES, arguments = listOf(repoIdArg)) { entry ->
+            val id = checkNotNull(entry.arguments?.getLong("repoId"))
+            StashesScreen(onBack = { nav.popBackStack() }, onOpenConflicts = { nav.navigate(Routes.conflicts(id)) })
+        }
+        composable(Routes.TAGS, arguments = listOf(repoIdArg)) { entry ->
+            val id = checkNotNull(entry.arguments?.getLong("repoId"))
+            TagsScreen(onBack = { nav.popBackStack() }, onOpenCommit = { nav.navigate(Routes.commit(id, it)) })
+        }
+        composable(Routes.REFLOG, arguments = listOf(repoIdArg)) { entry ->
+            val id = checkNotNull(entry.arguments?.getLong("repoId"))
+            ReflogScreen(onBack = { nav.popBackStack() }, onOpenCommit = { nav.navigate(Routes.commit(id, it)) })
+        }
         composable(Routes.COMMIT, arguments = listOf(repoIdArg, navArgument("commit") { type = NavType.StringType })) { entry ->
             val id = checkNotNull(entry.arguments?.getLong("repoId"))
             val commit = checkNotNull(entry.arguments?.getString("commit"))
-            CommitScreen(onBack = { nav.popBackStack() }, onOpenDiff = { path -> nav.navigate(Routes.diff(id, path, commit = commit)) })
+            CommitScreen(
+                onBack = { nav.popBackStack() },
+                onOpenDiff = { path -> nav.navigate(Routes.diff(id, path, commit = commit)) },
+                onOpenConflicts = { nav.navigate(Routes.conflicts(id)) },
+            )
         }
         composable(
             Routes.DIFF,

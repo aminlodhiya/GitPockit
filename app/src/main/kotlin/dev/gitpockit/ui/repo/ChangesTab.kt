@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material3.Checkbox
@@ -126,6 +127,14 @@ class ChangesViewModel @Inject constructor(
     fun unstage(paths: List<String>) = mutate { it.unstage(paths) }
     fun discard(path: String) = mutate { it.discardChanges(listOf(path)) }
 
+    fun stash(message: String, includeUntracked: Boolean) {
+        viewModelScope.launch {
+            runCatching { ops.write(repoId) { repo, git -> git.stashSave(message, includeUntracked, ops.authorFor(repo)) } }
+                .onSuccess { saved -> message(context.getString(if (saved) R.string.stash_saved else R.string.stash_nothing)) }
+                .onFailure { it.report() }
+        }
+    }
+
     fun commit() {
         val s = _state.value
         if (s.busy) return
@@ -163,6 +172,7 @@ fun ChangesTab(
     val s by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.messages.collect(showMessage) }
     var discard by remember { mutableStateOf<String?>(null) }
+    var stashing by remember { mutableStateOf(false) }
     val ext = GitPockitTheme.extendedColors
 
     if (!s.loaded) return
@@ -175,6 +185,16 @@ fun ChangesTab(
 
     Column(Modifier.fillMaxSize().imePadding()) {
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 8.dp)) {
+            if (s.conflicts.isEmpty()) {
+                item(key = "stash") {
+                    Row(Modifier.fillMaxWidth().padding(end = 8.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
+                        TextButton(onClick = { stashing = true }) {
+                            Icon(Icons.Default.Inventory2, null, Modifier.padding(end = 6.dp))
+                            Text(stringResource(R.string.stash_save))
+                        }
+                    }
+                }
+            }
             if (s.conflicts.isNotEmpty()) {
                 section(
                     title = R.string.section_conflicts,
@@ -230,6 +250,7 @@ fun ChangesTab(
         }
     }
 
+    if (stashing) StashDialog(viewModel::stash) { stashing = false }
     discard?.let { path ->
         ConfirmDialog(
             title = stringResource(R.string.discard_title, path.substringAfterLast('/')),

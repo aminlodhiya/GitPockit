@@ -90,7 +90,7 @@ class SyncDataTest {
         assertEquals(SyncSettings(), repo.sync)
         val settings = SyncSettings(
             SyncMode.PULL_ONLY, ConflictStrategy.KEEP_BOTH, "x {date}", 30,
-            onFileChange = true, wifiOnly = true, dailyTimes = listOf(540, 1290),
+            onFileChange = true, wifiOnly = true, dailyTimes = listOf(540, 1290), pullRebase = true,
         )
         repos.updateSyncSettings(repo.id, settings)
         assertEquals(settings, repos.get(repo.id)!!.sync)

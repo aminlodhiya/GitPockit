@@ -69,7 +69,11 @@ class RepoOps(
             if (!repo.directory.exists()) throw GitException("Folder not found: ${repo.directory.path}")
             if (mutate) _busy.update { it + id }
             try {
-                engine.open(repo.directory).use { git -> block(repo, git) }
+                engine.open(repo.directory).use { git ->
+                    // Commits JGit makes by itself (merges, rebases…) get the right author.
+                    git.setIdentity(authorFor(repo))
+                    block(repo, git)
+                }
             } finally {
                 if (mutate) {
                     _busy.update { it - id }

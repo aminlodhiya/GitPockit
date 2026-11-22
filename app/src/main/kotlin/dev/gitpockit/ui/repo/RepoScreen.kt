@@ -16,6 +16,9 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sync
@@ -63,6 +66,7 @@ import dev.gitpockit.core.designsystem.theme.GitPockitTheme
 import dev.gitpockit.background.SyncCoordinator
 import dev.gitpockit.core.data.model.SyncResult
 import dev.gitpockit.core.data.model.SyncTrigger
+import dev.gitpockit.core.git.GitOperation
 import dev.gitpockit.sync.RepoOps
 import dev.gitpockit.sync.SyncDirection
 import dev.gitpockit.ui.common.userMessage
@@ -102,7 +106,7 @@ data class RepoHeaderState(
     val ahead: Int = 0,
     val behind: Int = 0,
     val conflicts: Int = 0,
-    val merging: Boolean = false,
+    val operation: GitOperation = GitOperation.NONE,
 )
 
 @HiltViewModel
@@ -128,9 +132,9 @@ class RepoViewModel @javax.inject.Inject constructor(
                 ops.read(repoId) { _, git ->
                     val (ahead, behind) = git.aheadBehind() ?: (0 to 0)
                     val conflicts = git.status().conflicting.size
-                    val merging = git.isMerging()
+                    val operation = git.operation()
                     _state.update {
-                        it.copy(branch = git.currentBranch(), ahead = ahead, behind = behind, conflicts = conflicts, merging = merging)
+                        it.copy(branch = git.currentBranch(), ahead = ahead, behind = behind, conflicts = conflicts, operation = operation)
                     }
                 }
             }.onFailure { it.report() }
@@ -166,6 +170,13 @@ class RepoViewModel @javax.inject.Inject constructor(
     }
 }
 
+fun operationTitle(op: GitOperation): Int = when (op) {
+    GitOperation.REBASE -> R.string.op_rebase
+    GitOperation.CHERRY_PICK -> R.string.op_cherry_pick
+    GitOperation.REVERT -> R.string.op_revert
+    else -> R.string.op_merge
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RepoScreen(
@@ -175,6 +186,9 @@ fun RepoScreen(
     onOpenDiff: (path: String, staged: Boolean) -> Unit,
     onOpenConflicts: () -> Unit,
     onOpenLog: () -> Unit,
+    onOpenStashes: () -> Unit,
+    onOpenTags: () -> Unit,
+    onOpenReflog: () -> Unit,
     viewModel: RepoViewModel = hiltViewModel(),
 ) {
     val s by viewModel.state.collectAsStateWithLifecycle()
@@ -232,6 +246,21 @@ fun RepoScreen(
                                 onClick = { menu = false; viewModel.fetch() },
                             )
                             DropdownMenuItem(
+                                text = { Text(stringResource(R.string.menu_stashes)) },
+                                leadingIcon = { Icon(Icons.Default.Inventory2, null) },
+                                onClick = { menu = false; onOpenStashes() },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.menu_tags)) },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, null) },
+                                onClick = { menu = false; onOpenTags() },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.menu_reflog)) },
+                                leadingIcon = { Icon(Icons.Default.Restore, null) },
+                                onClick = { menu = false; onOpenReflog() },
+                            )
+                            DropdownMenuItem(
                                 text = { Text(stringResource(R.string.sync_log)) },
                                 leadingIcon = { Icon(Icons.Default.History, null) },
                                 onClick = { menu = false; onOpenLog() },
@@ -246,9 +275,13 @@ fun RepoScreen(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
                 )
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth()) else androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 4.dp))
-                if (s.conflicts > 0 || s.merging) {
+                if (s.conflicts > 0 || s.operation != GitOperation.NONE) {
                     StatusPill(
-                        stringResource(R.string.resolve_conflicts),
+                        if (s.operation != GitOperation.NONE) {
+                            stringResource(R.string.op_tap_to_resolve, stringResource(operationTitle(s.operation)))
+                        } else {
+                            stringResource(R.string.resolve_conflicts)
+                        },
                         ext.removed,
                         Modifier.padding(horizontal = 16.dp, vertical = 4.dp).clickable(onClick = onOpenConflicts),
                     )
@@ -271,7 +304,7 @@ fun RepoScreen(
             when (page) {
                 0 -> ChangesTab(onOpenDiff = onOpenDiff, onOpenConflicts = onOpenConflicts, showMessage = showMessage)
                 1 -> HistoryTab(onOpenCommit = onOpenCommit, showMessage = showMessage)
-                2 -> BranchesTab(showMessage = showMessage)
+                2 -> BranchesTab(showMessage = showMessage, onOpenConflicts = onOpenConflicts)
                 else -> RemotesTab(showMessage = showMessage)
             }
         }

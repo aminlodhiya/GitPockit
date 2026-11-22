@@ -75,6 +75,8 @@ data class RepoEntity(
     @ColumnInfo(defaultValue = "0") val pendingSync: Boolean = false,
     /** Daily sync times as minutes after midnight, comma separated, e.g. "540,1290" (v3). */
     @ColumnInfo(defaultValue = "") val syncTimes: String = "",
+    /** Pull with rebase instead of merge, for a linear history (v4). */
+    @ColumnInfo(defaultValue = "0") val pullRebase: Boolean = false,
 )
 
 @Entity(

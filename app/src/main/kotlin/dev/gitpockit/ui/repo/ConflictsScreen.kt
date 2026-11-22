@@ -57,6 +57,10 @@ import dev.gitpockit.core.designsystem.component.GradientButton
 import dev.gitpockit.core.designsystem.theme.CodeTextStyle
 import dev.gitpockit.core.designsystem.theme.GitPockitTheme
 import dev.gitpockit.core.git.ConflictVersions
+import dev.gitpockit.core.git.GitOperation
+import dev.gitpockit.core.git.OperationResult
+import dev.gitpockit.core.git.incoming
+import dev.gitpockit.core.git.yours
 import dev.gitpockit.sync.RepoOps
 import dev.gitpockit.sync.SyncEngine
 import dev.gitpockit.ui.common.ConfirmDialog
@@ -74,7 +78,7 @@ data class ConflictItem(val path: String, val mine: ConflictSide, val remote: Co
 
 data class ConflictsState(
     val loaded: Boolean = false,
-    val merging: Boolean = false,
+    val operation: GitOperation = GitOperation.NONE,
     val items: List<ConflictItem> = emptyList(),
     val busy: Boolean = false,
     val done: Boolean = false,
@@ -105,39 +109,52 @@ class ConflictsViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching {
                 ops.read(repoId) { _, git ->
-                    val merging = git.isMerging()
+                    val op = git.operation()
                     val items = git.status().conflicting.sorted().map { path ->
                         val v: ConflictVersions = git.conflictVersions(path)
-                        ConflictItem(path, v.ours.toSide(), v.theirs.toSide())
+                        ConflictItem(path, v.yours(op).toSide(), v.incoming(op).toSide())
                     }
-                    merging to items
+                    op to items
                 }
-            }.onSuccess { (merging, items) -> _state.update { it.copy(loaded = true, merging = merging, items = items) } }
+            }.onSuccess { (op, items) -> _state.update { it.copy(loaded = true, operation = op, items = items) } }
                 .onFailure { _state.update { s -> s.copy(loaded = true) }; it.report() }
         }
     }
 
-    fun keepMine(path: String) = resolve { git -> git.resolveConflict(path, git.conflictVersions(path).ours) }
+    fun keepMine(path: String) = resolve { git -> git.resolveConflict(path, git.conflictVersions(path).yours(git.operation())) }
 
-    fun keepRemote(path: String) = resolve { git -> git.resolveConflict(path, git.conflictVersions(path).theirs) }
+    fun keepRemote(path: String) = resolve { git -> git.resolveConflict(path, git.conflictVersions(path).incoming(git.operation())) }
 
-    /** Remote keeps the original name; mine is saved next to it as a named copy (same as automatic "keep both"). */
+    /** Incoming keeps the original name; yours is saved next to it as a named copy (same as automatic "keep both"). */
     fun keepBoth(path: String) = resolve { git ->
+        val op = git.operation()
         val v = git.conflictVersions(path)
-        git.resolveConflict(path, v.theirs)
-        v.ours?.let { git.resolveConflict(engine.conflictCopyName(path), it) }
+        git.resolveConflict(path, v.incoming(op))
+        v.yours(op)?.let { git.resolveConflict(engine.conflictCopyName(path), it) }
     }
 
-    /** Commits the merge, then syncs so the result is pushed. */
+    /**
+     * Finishes the paused operation. A rebase may stop again at the next commit; then the new
+     * conflicts are shown. Merges and rebases usually come from a sync, so a sync follows to push.
+     */
     fun finish() {
+        val op = _state.value.operation
         _state.update { it.copy(busy = true) }
         viewModelScope.launch {
             runCatching {
-                ops.write(repoId) { repo, git -> git.commit("Merge remote changes", ops.authorFor(repo)) }
-                coordinator.run(repoId, SyncTrigger.MANUAL)
-            }.onSuccess {
-                message(context.getString(R.string.merge_finished))
-                _state.update { it.copy(done = true) }
+                val result = ops.write(repoId) { repo, git -> git.continueOperation("", ops.authorFor(repo)) }
+                if (result !is OperationResult.Conflicts && (op == GitOperation.MERGE || op == GitOperation.REBASE)) {
+                    coordinator.run(repoId, SyncTrigger.MANUAL)
+                }
+                result
+            }.onSuccess { result ->
+                if (result is OperationResult.Conflicts) {
+                    message(context.getString(R.string.rebase_next_conflicts))
+                    refresh()
+                } else {
+                    message(context.getString(R.string.operation_done))
+                    _state.update { it.copy(done = true) }
+                }
             }.onFailure { it.report() }
             _state.update { it.copy(busy = false) }
         }
@@ -145,7 +162,7 @@ class ConflictsViewModel @Inject constructor(
 
     fun abort() {
         viewModelScope.launch {
-            runCatching { ops.write(repoId) { _, git -> git.abortMerge() } }
+            runCatching { ops.write(repoId) { _, git -> git.abortOperation() } }
                 .onSuccess { _state.update { it.copy(done = true) } }
                 .onFailure { it.report() }
         }
@@ -175,16 +192,25 @@ fun ConflictsScreen(onBack: () -> Unit, onEdit: (String) -> Unit, viewModel: Con
                 title = { Text(stringResource(R.string.conflicts_title)) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back)) } },
                 actions = {
-                    if (s.merging) TextButton(onClick = { confirmAbort = true }) { Text(stringResource(R.string.abort_merge), color = MaterialTheme.colorScheme.error) }
+                    if (s.operation != GitOperation.NONE) {
+                        TextButton(onClick = { confirmAbort = true }) { Text(stringResource(R.string.abort_operation), color = MaterialTheme.colorScheme.error) }
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
         bottomBar = {
-            if (s.merging) {
+            if (s.operation != GitOperation.NONE) {
                 Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerLow).padding(16.dp)) {
                     GradientButton(
-                        text = stringResource(R.string.finish_merge),
+                        text = stringResource(
+                            when (s.operation) {
+                                GitOperation.REBASE -> R.string.continue_rebase
+                                GitOperation.CHERRY_PICK -> R.string.finish_cherry_pick
+                                GitOperation.REVERT -> R.string.finish_revert
+                                else -> R.string.finish_merge_sync
+                            },
+                        ),
                         onClick = viewModel::finish,
                         enabled = s.items.isEmpty() && !s.busy,
                         icon = Icons.Default.Check,
@@ -210,11 +236,11 @@ fun ConflictsScreen(onBack: () -> Unit, onEdit: (String) -> Unit, viewModel: Con
             items(s.items, key = { it.path }) { item ->
                 GpCard(Modifier.fillMaxWidth()) {
                     Text(item.path, style = CodeTextStyle, maxLines = 2, overflow = TextOverflow.MiddleEllipsis)
-                    Side(stringResource(R.string.conflict_local), item.mine, ext.modified)
-                    Side(stringResource(R.string.conflict_remote), item.remote, MaterialTheme.colorScheme.secondary)
+                    Side(stringResource(R.string.conflict_yours), item.mine, ext.modified)
+                    Side(stringResource(R.string.conflict_incoming), item.remote, MaterialTheme.colorScheme.secondary)
                     Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { viewModel.keepMine(item.path) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.keep_local), maxLines = 1) }
-                        OutlinedButton(onClick = { viewModel.keepRemote(item.path) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.keep_remote), maxLines = 1) }
+                        OutlinedButton(onClick = { viewModel.keepMine(item.path) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.keep_yours), maxLines = 1) }
+                        OutlinedButton(onClick = { viewModel.keepRemote(item.path) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.keep_incoming), maxLines = 1) }
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { viewModel.keepBoth(item.path) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.keep_both), maxLines = 1) }
@@ -227,15 +253,18 @@ fun ConflictsScreen(onBack: () -> Unit, onEdit: (String) -> Unit, viewModel: Con
     }
     if (confirmAbort) {
         ConfirmDialog(
-            title = stringResource(R.string.abort_merge_title),
-            message = stringResource(R.string.abort_merge_message),
-            confirmText = stringResource(R.string.abort_merge),
+            title = stringResource(R.string.abort_operation_title, s.operation.label()),
+            message = stringResource(R.string.abort_operation_message),
+            confirmText = stringResource(R.string.abort_operation),
             destructive = true,
             onConfirm = viewModel::abort,
             onDismiss = { confirmAbort = false },
         )
     }
 }
+
+@Composable
+fun GitOperation.label(): String = stringResource(operationTitle(this)).lowercase()
 
 @Composable
 private fun Side(label: String, side: ConflictSide, color: androidx.compose.ui.graphics.Color) {

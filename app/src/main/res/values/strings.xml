@@ -349,4 +349,81 @@
     <string name="sync_time_remove">Remove %1$s</string>
     <string name="exact_alarm_off">Without \"Alarms &amp; reminders\" permission, syncs may run a few minutes late.</string>
     <string name="exact_alarm_allow">Allow</string>
+
+    <!-- Phase 3a: power Git -->
+    <string name="menu_stashes">Stashes</string>
+    <string name="menu_tags">Tags</string>
+    <string name="menu_reflog">Reflog (undo history)</string>
+    <string name="pull_rebase">Pull with rebase</string>
+    <string name="pull_rebase_desc">Put your commits on top of the remote ones instead of creating merge commits</string>
+
+    <string name="op_merge">Merge in progress</string>
+    <string name="op_rebase">Rebase in progress</string>
+    <string name="op_cherry_pick">Cherry-pick in progress</string>
+    <string name="op_revert">Revert in progress</string>
+    <string name="op_tap_to_resolve">%1$s: tap to resolve</string>
+    <string name="finish_merge_sync">Finish merge &amp; sync</string>
+    <string name="continue_rebase">Continue rebase</string>
+    <string name="finish_cherry_pick">Finish cherry-pick</string>
+    <string name="finish_revert">Finish revert</string>
+    <string name="abort_operation">Abort</string>
+    <string name="abort_operation_title">Abort the %1$s?</string>
+    <string name="abort_operation_message">Everything goes back to how it was before it started.</string>
+    <string name="conflict_yours">Yours</string>
+    <string name="conflict_incoming">Incoming</string>
+    <string name="keep_yours">Keep yours</string>
+    <string name="keep_incoming">Keep incoming</string>
+    <string name="rebase_next_conflicts">The next commit also has conflicts.</string>
+    <string name="operation_done">Done</string>
+
+    <string name="branch_merge_into_current">Merge into %1$s</string>
+    <string name="branch_rebase_onto">Rebase %1$s onto this</string>
+    <string name="merge_done">Merged %1$s</string>
+    <string name="rebase_done">Rebased onto %1$s</string>
+    <string name="conflicts_to_resolve">Conflicts in %1$d file(s). Resolve them to continue.</string>
+
+    <string name="commit_actions">Commit actions</string>
+    <string name="action_cherry_pick">Cherry-pick onto current branch</string>
+    <string name="action_revert_commit">Revert (undo this commit)</string>
+    <string name="action_reset_here">Reset current branch to here…</string>
+    <string name="action_tag_here">Create tag here…</string>
+    <string name="action_checkout_commit">Check out this commit</string>
+    <string name="cherry_picked">Cherry-picked</string>
+    <string name="reverted">Reverted</string>
+    <string name="detached_at">Checked out %1$s (detached: no branch)</string>
+    <string name="reset_title">Reset %1$s to %2$s?</string>
+    <string name="reset_soft">Soft: keep changes staged</string>
+    <string name="reset_mixed">Mixed: keep changes in files (unstaged)</string>
+    <string name="reset_hard">Hard: discard all changes</string>
+    <string name="reset_hard_warning">Hard reset permanently discards uncommitted changes. Commits after this point can still be recovered from the reflog.</string>
+    <string name="reset_done">Branch reset to %1$s</string>
+    <string name="action_reset">Reset</string>
+
+    <string name="stashes_empty">No stashes. Stash your changes to set them aside for later.</string>
+    <string name="stash_save">Stash changes</string>
+    <string name="stash_message">Message (optional)</string>
+    <string name="stash_include_untracked">Include new (untracked) files</string>
+    <string name="stash_saved">Changes stashed</string>
+    <string name="stash_nothing">Nothing to stash</string>
+    <string name="stash_apply">Apply</string>
+    <string name="stash_pop">Apply &amp; delete</string>
+    <string name="stash_applied">Stash applied</string>
+    <string name="stash_drop_title">Delete this stash?</string>
+    <string name="stash_drop_message">Its changes will be lost.</string>
+
+    <string name="tags_empty">No tags yet</string>
+    <string name="tag_create">Create tag</string>
+    <string name="tag_name">Tag name</string>
+    <string name="tag_message">Message (optional, makes an annotated tag)</string>
+    <string name="tag_push">Push to %1$s</string>
+    <string name="tag_delete_local">Delete</string>
+    <string name="tag_delete_remote">Delete from %1$s</string>
+    <string name="tag_delete_title">Delete tag %1$s?</string>
+    <string name="tag_pushed">Tag pushed</string>
+    <string name="tag_deleted_remote">Tag deleted from remote</string>
+    <string name="tag_annotated">Annotated</string>
+
+    <string name="reflog_explain">Every position your branch has been at. If a reset or rebase went wrong, find the commit from before and reset back to it.</string>
+    <string name="reflog_empty">No history yet</string>
+    <string name="action_view_commit">View commit</string>
 </resources>

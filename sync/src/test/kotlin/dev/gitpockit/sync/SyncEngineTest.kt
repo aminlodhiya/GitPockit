@@ -216,6 +216,69 @@ class SyncEngineTest {
         assertTrue(out.pushed)
     }
 
+    // ---- pull with rebase
+
+    private fun phoneLog(): List<org.eclipse.jgit.revwalk.RevCommit> = Git.open(File(tmp.root, "phone")).use { it.log().call().toList() }
+
+    @Test fun mergeCommitsCarryTheAppAuthor() = runTest {
+        val id = phone()
+        laptop { it.write("other.md", "laptop\n") }
+        phoneFile("mine.md").writeText("phone\n")
+        assertEquals(SyncResult.SYNCED, sync.sync(id, SyncTrigger.MANUAL).result)
+        val merge = phoneLog().first()
+        assertEquals(2, merge.parentCount)
+        assertEquals("Phone", merge.committerIdent.name) // not the Android system user
+    }
+
+    @Test fun rebasePullKeepsHistoryLinear() = runTest {
+        val id = phone(SyncSettings(pullRebase = true))
+        laptop { it.write("other.md", "laptop\n") }
+        phoneFile("mine.md").writeText("phone\n")
+        val out = sync.sync(id, SyncTrigger.MANUAL)
+        assertEquals(SyncResult.SYNCED, out.result)
+        assertTrue(out.pushed)
+        assertTrue(phoneLog().all { it.parentCount <= 1 })
+        assertEquals(3, remoteLog().size)
+    }
+
+    private suspend fun rebaseConflict(strategy: ConflictStrategy): Long {
+        val id = phone(SyncSettings(pullRebase = true, conflictStrategy = strategy))
+        laptop { it.write("notes.md", "laptop\n") }
+        phoneFile("notes.md").writeText("phone\n")
+        return id
+    }
+
+    @Test fun rebaseKeepLocalKeepsMyText() = runTest {
+        val id = rebaseConflict(ConflictStrategy.KEEP_LOCAL)
+        assertEquals(SyncResult.SYNCED, sync.sync(id, SyncTrigger.SCHEDULE).result)
+        assertEquals("phone\n", phoneFile("notes.md").readText())
+        assertTrue(phoneLog().all { it.parentCount <= 1 })
+    }
+
+    @Test fun rebaseKeepRemoteDropsMyNowEmptyCommit() = runTest {
+        val id = rebaseConflict(ConflictStrategy.KEEP_REMOTE)
+        val out = sync.sync(id, SyncTrigger.SCHEDULE)
+        assertEquals(SyncResult.SYNCED, out.result)
+        assertEquals("laptop\n", phoneFile("notes.md").readText())
+        assertEquals(remoteLog().size, phoneLog().size)
+    }
+
+    @Test fun rebaseKeepBothSavesMyCopy() = runTest {
+        val id = rebaseConflict(ConflictStrategy.KEEP_BOTH)
+        assertEquals(SyncResult.SYNCED, sync.sync(id, SyncTrigger.SCHEDULE).result)
+        assertEquals("laptop\n", phoneFile("notes.md").readText())
+        assertEquals("phone\n", phoneFile("notes (conflict Pixel 8 2026-11-22 1530).md").readText())
+    }
+
+    @Test fun rebaseAskLeavesRebaseForTheUser() = runTest {
+        val id = rebaseConflict(ConflictStrategy.ASK)
+        val out = sync.sync(id, SyncTrigger.SCHEDULE)
+        assertEquals(SyncResult.CONFLICTS, out.result)
+        val again = sync.sync(id, SyncTrigger.SCHEDULE)
+        assertEquals(SyncResult.CONFLICTS, again.result)
+        assertTrue(again.message!!, again.message!!.contains("rebase"))
+    }
+
     @Test fun conflictCopyNames() = runTest {
         assertEquals("a/b/todo (conflict Pixel 8 2026-11-22 1530).md", sync.conflictCopyName("a/b/todo.md"))
         assertEquals("Makefile (conflict Pixel 8 2026-11-22 1530)", sync.conflictCopyName("Makefile"))

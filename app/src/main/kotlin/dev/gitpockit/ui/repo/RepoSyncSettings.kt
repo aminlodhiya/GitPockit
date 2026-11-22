@@ -139,6 +139,9 @@ fun SyncSettingsCard(settings: SyncSettings, onChange: (SyncSettings) -> Unit, o
         SwitchRow(stringResource(R.string.sync_wifi_only), stringResource(R.string.sync_wifi_only_desc), settings.wifiOnly) {
             update(settings.copy(wifiOnly = it))
         }
+        SwitchRow(stringResource(R.string.pull_rebase), stringResource(R.string.pull_rebase_desc), settings.pullRebase) {
+            onChange(settings.copy(pullRebase = it))
+        }
         if (settings.mode == SyncMode.FULL) {
             Picker(
                 label = stringResource(R.string.conflict_strategy),

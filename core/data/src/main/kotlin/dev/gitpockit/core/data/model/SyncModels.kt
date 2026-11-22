@@ -15,6 +15,8 @@ data class SyncSettings(
     val wifiOnly: Boolean = false,
     /** Daily sync times, in minutes after midnight (local time), sorted and unique. */
     val dailyTimes: List<Int> = emptyList(),
+    /** Rebase local commits on top of the remote instead of creating merge commits. */
+    val pullRebase: Boolean = false,
 )
 
 enum class SyncTrigger { MANUAL, SCHEDULE, FILE_CHANGE, APP_OPEN, APP_CLOSE, TILE, WIDGET, INTENT, RETRY }

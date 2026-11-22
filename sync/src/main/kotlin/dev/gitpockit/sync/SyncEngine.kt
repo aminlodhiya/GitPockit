@@ -9,6 +9,10 @@ import dev.gitpockit.core.data.repository.RepoRepository
 import dev.gitpockit.core.git.GitAuthException
 import dev.gitpockit.core.git.GitException
 import dev.gitpockit.core.git.GitNetworkException
+import dev.gitpockit.core.git.GitOperation
+import dev.gitpockit.core.git.OperationResult
+import dev.gitpockit.core.git.incoming
+import dev.gitpockit.core.git.yours
 import dev.gitpockit.core.git.GitRepository
 import dev.gitpockit.core.git.PullResult
 import dev.gitpockit.core.git.RepoStatus
@@ -84,8 +88,10 @@ class SyncEngine(
 
     private suspend fun run(repo: Repo, git: GitRepository, trigger: SyncTrigger, direction: SyncDirection): SyncOutcome {
         val status = git.status()
-        if (git.isMerging() || status.conflicting.isNotEmpty()) {
-            return SyncOutcome(SyncResult.CONFLICTS, "Resolve the conflicts to finish the merge", conflicts = status.conflicting)
+        val paused = git.operation()
+        if (paused != GitOperation.NONE || status.conflicting.isNotEmpty()) {
+            val what = paused.name.lowercase().replace('_', '-').takeIf { paused != GitOperation.NONE } ?: "merge"
+            return SyncOutcome(SyncResult.CONFLICTS, "Finish or abort the $what first", conflicts = status.conflicting)
         }
 
         val fullMode = repo.sync.mode == SyncMode.FULL
@@ -182,7 +188,7 @@ class SyncEngine(
     }
 
     private suspend fun pull(repo: Repo, git: GitRepository, credentials: dev.gitpockit.core.git.GitCredentials): PullStep =
-        when (val r = git.pull(remote = repo.remoteName, credentials = credentials)) {
+        when (val r = git.pull(remote = repo.remoteName, credentials = credentials, rebase = repo.sync.pullRebase)) {
             PullResult.UpToDate -> PullStep.Done(changed = false)
             PullResult.FastForward, PullResult.Merged -> PullStep.Done(changed = true)
             is PullResult.Conflicts -> {
@@ -195,31 +201,44 @@ class SyncEngine(
             }
         }
 
-    /** Applies KEEP_LOCAL / KEEP_REMOTE / KEEP_BOTH to every conflicted file and commits the merge. */
-    private suspend fun autoResolve(repo: Repo, git: GitRepository, paths: Set<String>) {
+    /**
+     * Applies KEEP_LOCAL / KEEP_REMOTE / KEEP_BOTH to every conflicted file and finishes the
+     * merge or rebase. A rebase can stop again at each replayed commit, hence the loop.
+     */
+    private suspend fun autoResolve(repo: Repo, git: GitRepository, firstConflicts: Set<String>) {
         val strategy = repo.sync.conflictStrategy
-        for (path in paths.sorted()) {
-            val v = git.conflictVersions(path)
-            when (strategy) {
-                ConflictStrategy.KEEP_LOCAL -> git.resolveConflict(path, v.ours)
-                ConflictStrategy.KEEP_REMOTE -> git.resolveConflict(path, v.theirs)
-                ConflictStrategy.KEEP_BOTH -> {
-                    // The remote version keeps the original name, so other devices see no surprise;
-                    // the local version is saved next to it as a clearly named copy.
-                    git.resolveConflict(path, v.theirs)
-                    if (v.ours != null && !v.ours.contentEquals(v.theirs)) {
-                        git.resolveConflict(conflictCopyName(path), v.ours)
-                    }
-                }
-                ConflictStrategy.ASK -> error("unreachable")
-            }
-        }
         val label = when (strategy) {
             ConflictStrategy.KEEP_LOCAL -> "kept local version"
             ConflictStrategy.KEEP_REMOTE -> "kept remote version"
             else -> "kept both versions"
         }
-        git.commit("Merge remote changes ($label of ${paths.size} file(s))", ops.authorFor(repo))
+        var conflicts = firstConflicts
+        repeat(MAX_REBASE_STEPS) {
+            val op = git.operation()
+            for (path in conflicts.sorted()) {
+                val v = git.conflictVersions(path)
+                // During a rebase Git swaps "ours"/"theirs"; yours()/incoming() undo that.
+                val mine = v.yours(op)
+                val remote = v.incoming(op)
+                when (strategy) {
+                    ConflictStrategy.KEEP_LOCAL -> git.resolveConflict(path, mine)
+                    ConflictStrategy.KEEP_REMOTE -> git.resolveConflict(path, remote)
+                    ConflictStrategy.KEEP_BOTH -> {
+                        // The remote version keeps the original name, so other devices see no surprise;
+                        // the local version is saved next to it as a clearly named copy.
+                        git.resolveConflict(path, remote)
+                        if (mine != null && !mine.contentEquals(remote)) git.resolveConflict(conflictCopyName(path), mine)
+                    }
+                    ConflictStrategy.ASK -> error("unreachable")
+                }
+            }
+            val message = "Merge remote changes ($label of ${conflicts.size} file(s))"
+            when (val r = git.continueOperation(message, ops.authorFor(repo))) {
+                is OperationResult.Conflicts -> conflicts = r.paths
+                else -> return
+            }
+        }
+        throw GitException("Gave up resolving conflicts automatically after $MAX_REBASE_STEPS steps")
     }
 
     /** `notes/todo.md` → `notes/todo (conflict Pixel 8 2026-11-22 1530).md` */
@@ -264,5 +283,6 @@ class SyncEngine(
 
     companion object {
         const val DEFAULT_TEMPLATE = "Sync from {device}: {files}"
+        private const val MAX_REBASE_STEPS = 200
     }
 }

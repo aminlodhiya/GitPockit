@@ -25,6 +25,12 @@ interface GitEngine {
 interface GitRepository : AutoCloseable {
     val workTree: File
 
+    /**
+     * Identity for commits Git creates by itself (merge, cherry-pick, revert, rebase).
+     * Kept in memory only; the repo's .git/config is not changed.
+     */
+    fun setIdentity(author: GitAuthor)
+
     suspend fun status(): RepoStatus
 
     suspend fun currentBranch(): String?
@@ -103,6 +109,64 @@ interface GitRepository : AutoCloseable {
 
     /** True while a merge is in progress (after a pull with conflicts, before the merge commit). */
     suspend fun isMerging(): Boolean
+
+    /** The paused multi-step operation, if any. */
+    suspend fun operation(): GitOperation
+
+    /**
+     * Continues the paused operation once conflicts are resolved: commits a merge, cherry-pick
+     * or revert (with [message], or Git's prepared message when blank), or replays the
+     * remaining commits of a rebase.
+     */
+    suspend fun continueOperation(message: String, author: GitAuthor): OperationResult
+
+    /** Abandons the paused operation and restores the state from before it started. */
+    suspend fun abortOperation()
+
+    // ---- Merge, rebase, cherry-pick, revert, reset
+
+    /** Merges [rev] (branch, tag or commit) into the current branch. */
+    suspend fun merge(rev: String, message: String? = null): OperationResult
+
+    /** Rebases the current branch onto [upstream]. */
+    suspend fun rebase(upstream: String): OperationResult
+
+    suspend fun cherryPick(commitId: String): OperationResult
+
+    /** Creates a commit that undoes [commitId]. */
+    suspend fun revert(commitId: String): OperationResult
+
+    suspend fun reset(rev: String, mode: ResetMode)
+
+    /** Checks out a commit or tag without a branch ("detached HEAD"). */
+    suspend fun checkoutDetached(rev: String)
+
+    // ---- Stash
+
+    suspend fun stashes(): List<StashInfo>
+
+    /** Returns false when there was nothing to stash. */
+    suspend fun stashSave(message: String?, includeUntracked: Boolean, author: GitAuthor): Boolean
+
+    /** Applies a stash; with [pop] it is dropped afterwards unless applying caused conflicts. */
+    suspend fun stashApply(index: Int, pop: Boolean): OperationResult
+
+    suspend fun stashDrop(index: Int)
+
+    // ---- Tags
+
+    suspend fun tags(): List<TagInfo>
+
+    /** Lightweight tag when [message] is null, annotated otherwise. Tags HEAD when [rev] is null. */
+    suspend fun createTag(name: String, message: String?, rev: String?, author: GitAuthor)
+
+    suspend fun deleteTag(name: String)
+
+    suspend fun pushTag(name: String, remote: String, credentials: GitCredentials, delete: Boolean = false): PushResult
+
+    // ---- Reflog
+
+    suspend fun reflog(maxCount: Int = 200): List<ReflogEntryInfo>
 
     suspend fun conflictVersions(path: String): ConflictVersions
 

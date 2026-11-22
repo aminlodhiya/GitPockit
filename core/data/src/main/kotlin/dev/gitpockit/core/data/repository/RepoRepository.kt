@@ -115,6 +115,7 @@ class RepoRepository(
                 syncOnChange = settings.onFileChange,
                 wifiOnly = settings.wifiOnly,
                 syncTimes = encodeTimes(settings.dailyTimes),
+                pullRebase = settings.pullRebase,
             ),
         )
     }
@@ -206,6 +207,7 @@ class RepoRepository(
             onFileChange = syncOnChange,
             wifiOnly = wifiOnly,
             dailyTimes = decodeTimes(syncTimes),
+            pullRebase = pullRebase,
         ),
         pendingSync = pendingSync,
     )

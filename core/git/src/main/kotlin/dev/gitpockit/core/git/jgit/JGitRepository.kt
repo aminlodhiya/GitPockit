@@ -4,6 +4,13 @@ import dev.gitpockit.core.git.BranchInfo
 import dev.gitpockit.core.git.ChangeType
 import dev.gitpockit.core.git.CommitDetail
 import dev.gitpockit.core.git.ConflictVersions
+import dev.gitpockit.core.git.GitLocalChangesException
+import dev.gitpockit.core.git.GitOperation
+import dev.gitpockit.core.git.OperationResult
+import dev.gitpockit.core.git.ReflogEntryInfo
+import dev.gitpockit.core.git.ResetMode
+import dev.gitpockit.core.git.StashInfo
+import dev.gitpockit.core.git.TagInfo
 import dev.gitpockit.core.git.FileChange
 import dev.gitpockit.core.git.FileDiff
 import dev.gitpockit.core.git.WorkingDiffMode
@@ -18,7 +25,11 @@ import dev.gitpockit.core.git.PushResult
 import dev.gitpockit.core.git.RemoteInfo
 import dev.gitpockit.core.git.RepoStatus
 import kotlinx.coroutines.Job
+import org.eclipse.jgit.api.CherryPickResult
 import org.eclipse.jgit.api.CreateBranchCommand
+import org.eclipse.jgit.api.MergeCommand
+import org.eclipse.jgit.api.RebaseCommand
+import org.eclipse.jgit.api.errors.StashApplyFailureException
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.ListBranchCommand
 import org.eclipse.jgit.api.MergeResult
@@ -35,6 +46,8 @@ import org.eclipse.jgit.dircache.DirCacheEntry
 import org.eclipse.jgit.lib.RefUpdate
 import org.eclipse.jgit.lib.RepositoryState
 import org.eclipse.jgit.revwalk.RevWalk
+import org.eclipse.jgit.revwalk.RevTag
+import org.eclipse.jgit.transport.RefSpec
 import org.eclipse.jgit.transport.RemoteConfig
 import org.eclipse.jgit.treewalk.TreeWalk
 import org.eclipse.jgit.util.io.NullOutputStream
@@ -213,8 +226,9 @@ internal class JGitRepository(
                     RebaseResult.Status.UP_TO_DATE -> PullResult.UpToDate
                     RebaseResult.Status.FAST_FORWARD -> PullResult.FastForward
                     RebaseResult.Status.OK -> PullResult.Merged
-                    RebaseResult.Status.STOPPED, RebaseResult.Status.CONFLICTS ->
-                        PullResult.Conflicts(git.status().call().conflicting.ifEmpty { rr.conflicts?.toSet().orEmpty() })
+                    RebaseResult.Status.STOPPED -> PullResult.Conflicts(git.status().call().conflicting)
+                    RebaseResult.Status.CONFLICTS, RebaseResult.Status.UNCOMMITTED_CHANGES ->
+                        throw GitLocalChangesException(rr.conflicts.orEmpty() + rr.uncommittedChanges.orEmpty())
                     else -> throw GitException("Rebase failed: ${rr.status}")
                 }
             }
@@ -389,7 +403,205 @@ internal class JGitRepository(
         }
     }
 
+    override fun setIdentity(author: GitAuthor) {
+        // In-memory only (no save()): JGit reads user.name/email when it creates commits itself.
+        repo.config.setString("user", null, "name", author.name)
+        repo.config.setString("user", null, "email", author.email)
+    }
+
     override suspend fun isMerging(): Boolean = engine.io { repo.repositoryState == RepositoryState.MERGING }
+
+    override suspend fun operation(): GitOperation = engine.io { currentOperation() }
+
+    private fun currentOperation(): GitOperation = when (repo.repositoryState) {
+        RepositoryState.MERGING, RepositoryState.MERGING_RESOLVED -> GitOperation.MERGE
+        RepositoryState.CHERRY_PICKING, RepositoryState.CHERRY_PICKING_RESOLVED -> GitOperation.CHERRY_PICK
+        RepositoryState.REVERTING, RepositoryState.REVERTING_RESOLVED -> GitOperation.REVERT
+        RepositoryState.REBASING, RepositoryState.REBASING_MERGE, RepositoryState.REBASING_REBASING,
+        RepositoryState.REBASING_INTERACTIVE, RepositoryState.APPLY -> GitOperation.REBASE
+        else -> GitOperation.NONE
+    }
+
+    override suspend fun continueOperation(message: String, author: GitAuthor): OperationResult = engine.io {
+        val conflicts = git.status().call().conflicting
+        if (conflicts.isNotEmpty()) return@io OperationResult.Conflicts(conflicts)
+        when (currentOperation()) {
+            GitOperation.NONE -> OperationResult.UpToDate
+            GitOperation.REBASE -> {
+                var r = git.rebase().setOperation(RebaseCommand.Operation.CONTINUE).call()
+                // The resolution made this commit empty (e.g. "keep remote"): drop it and go on.
+                if (r.status == RebaseResult.Status.NOTHING_TO_COMMIT) r = git.rebase().setOperation(RebaseCommand.Operation.SKIP).call()
+                rebaseResult(r)
+            }
+            else -> {
+                val ident = PersonIdent(author.name, author.email)
+                // Default to the message Git prepared (e.g. "Merge branch 'x'" or the picked commit's message).
+                val text = message.ifBlank { repo.readMergeCommitMsg()?.trim().orEmpty() }.ifBlank { "Merge" }
+                git.commit().setMessage(text).setAuthor(ident).setCommitter(ident).setSign(false).call()
+                OperationResult.Done
+            }
+        }
+    }
+
+    override suspend fun abortOperation() = engine.io {
+        when (currentOperation()) {
+            GitOperation.REBASE -> git.rebase().setOperation(RebaseCommand.Operation.ABORT).call()
+            // Merge, cherry-pick and revert: back to the last commit; also clears MERGE_HEAD etc.
+            else -> git.reset().setMode(ResetCommand.ResetType.HARD).setRef(Constants.HEAD).call()
+        }
+        Unit
+    }
+
+    override suspend fun merge(rev: String, message: String?): OperationResult = engine.io {
+        val target = repo.findRef(rev) ?: repo.exactRef(rev)
+        val cmd = git.merge().setCommit(true).setFastForward(MergeCommand.FastForwardMode.FF)
+        if (target != null) cmd.include(target) else cmd.include(resolveCommit(rev))
+        message?.let { cmd.setMessage(it) }
+        val r = cmd.call()
+        when (r.mergeStatus) {
+            MergeResult.MergeStatus.ALREADY_UP_TO_DATE -> OperationResult.UpToDate
+            MergeResult.MergeStatus.FAST_FORWARD, MergeResult.MergeStatus.FAST_FORWARD_SQUASHED -> OperationResult.FastForward
+            MergeResult.MergeStatus.MERGED, MergeResult.MergeStatus.MERGED_SQUASHED -> OperationResult.Done
+            MergeResult.MergeStatus.CONFLICTING -> OperationResult.Conflicts(r.conflicts?.keys.orEmpty())
+            MergeResult.MergeStatus.FAILED -> throw GitLocalChangesException(r.failingPaths?.keys?.toList().orEmpty())
+            else -> throw GitException("Merge failed: ${r.mergeStatus}")
+        }
+    }
+
+    override suspend fun rebase(upstream: String): OperationResult = engine.io {
+        rebaseResult(git.rebase().setUpstream(resolveCommit(upstream)).call())
+    }
+
+    private fun rebaseResult(r: RebaseResult): OperationResult = when (r.status) {
+        RebaseResult.Status.UP_TO_DATE -> OperationResult.UpToDate
+        RebaseResult.Status.FAST_FORWARD -> OperationResult.FastForward
+        RebaseResult.Status.OK, RebaseResult.Status.NOTHING_TO_COMMIT -> OperationResult.Done
+        RebaseResult.Status.STOPPED -> OperationResult.Conflicts(git.status().call().conflicting)
+        RebaseResult.Status.CONFLICTS, RebaseResult.Status.UNCOMMITTED_CHANGES ->
+            throw GitLocalChangesException(r.conflicts.orEmpty() + r.uncommittedChanges.orEmpty())
+        else -> throw GitException("Rebase failed: ${r.status}")
+    }
+
+    override suspend fun cherryPick(commitId: String): OperationResult = engine.io {
+        val r = git.cherryPick().include(resolveCommit(commitId)).call()
+        when (r.status) {
+            CherryPickResult.CherryPickStatus.OK -> OperationResult.Done
+            CherryPickResult.CherryPickStatus.CONFLICTING -> OperationResult.Conflicts(git.status().call().conflicting)
+            CherryPickResult.CherryPickStatus.FAILED -> throw GitLocalChangesException(r.failingPaths?.keys?.toList().orEmpty())
+        }
+    }
+
+    override suspend fun revert(commitId: String): OperationResult = engine.io {
+        val cmd = git.revert().include(resolveCommit(commitId))
+        val commit = cmd.call()
+        when {
+            commit != null -> OperationResult.Done
+            cmd.failingResult != null -> throw GitLocalChangesException(cmd.failingResult.failingPaths?.keys?.toList().orEmpty())
+            else -> OperationResult.Conflicts(git.status().call().conflicting.ifEmpty { cmd.unmergedPaths?.toSet().orEmpty() })
+        }
+    }
+
+    override suspend fun reset(rev: String, mode: ResetMode) = engine.io {
+        val type = when (mode) {
+            ResetMode.SOFT -> ResetCommand.ResetType.SOFT
+            ResetMode.MIXED -> ResetCommand.ResetType.MIXED
+            ResetMode.HARD -> ResetCommand.ResetType.HARD
+        }
+        git.reset().setRef(resolveCommit(rev).name).setMode(type).call()
+        Unit
+    }
+
+    override suspend fun checkoutDetached(rev: String) = engine.io {
+        git.checkout().setName(resolveCommit(rev).name).call()
+        Unit
+    }
+
+    override suspend fun stashes(): List<StashInfo> = engine.io {
+        git.stashList().call().mapIndexed { i, c ->
+            StashInfo(i, c.name, c.fullMessage.trim(), Instant.ofEpochSecond(c.commitTime.toLong()))
+        }
+    }
+
+    override suspend fun stashSave(message: String?, includeUntracked: Boolean, author: GitAuthor): Boolean = engine.io {
+        val cmd = git.stashCreate()
+            .setIncludeUntracked(includeUntracked)
+            .setPerson(PersonIdent(author.name, author.email))
+        message?.takeIf { it.isNotBlank() }?.let { cmd.setWorkingDirectoryMessage(it) }
+        cmd.call() != null
+    }
+
+    override suspend fun stashApply(index: Int, pop: Boolean): OperationResult = engine.io {
+        val ref = "stash@{$index}"
+        try {
+            git.stashApply().setStashRef(ref).setRestoreUntracked(true).call()
+        } catch (e: StashApplyFailureException) {
+            val conflicts = git.status().call().conflicting
+            if (conflicts.isNotEmpty()) return@io OperationResult.Conflicts(conflicts) // the stash is kept
+            throw GitLocalChangesException(git.status().call().uncommittedChanges.toList(), e)
+        }
+        if (pop) git.stashDrop().setStashRef(index).call()
+        OperationResult.Done
+    }
+
+    override suspend fun stashDrop(index: Int) = engine.io {
+        git.stashDrop().setStashRef(index).call()
+        Unit
+    }
+
+    override suspend fun tags(): List<TagInfo> = engine.io {
+        RevWalk(repo).use { walk ->
+            git.tagList().call().map { ref ->
+                val obj = walk.parseAny(ref.objectId)
+                val tag = obj as? RevTag
+                val commit = walk.peel(obj)
+                TagInfo(
+                    name = Repository.shortenRefName(ref.name),
+                    commitId = commit.name,
+                    annotated = tag != null,
+                    message = tag?.fullMessage?.trim(),
+                    taggerName = tag?.taggerIdent?.name,
+                    time = tag?.taggerIdent?.whenAsInstant ?: (commit as? RevCommit)?.let { Instant.ofEpochSecond(it.commitTime.toLong()) },
+                )
+            }.sortedByDescending { it.time }
+        }
+    }
+
+    override suspend fun createTag(name: String, message: String?, rev: String?, author: GitAuthor) = engine.io {
+        RevWalk(repo).use { walk ->
+            val target = walk.parseAny(rev?.let(::resolveCommit) ?: resolveCommit(Constants.HEAD))
+            val cmd = git.tag().setName(name).setObjectId(target).setSigned(false)
+            if (message.isNullOrBlank()) {
+                cmd.setAnnotated(false)
+            } else {
+                cmd.setAnnotated(true).setMessage(message).setTagger(PersonIdent(author.name, author.email))
+            }
+            cmd.call()
+        }
+        Unit
+    }
+
+    override suspend fun deleteTag(name: String) = engine.io {
+        git.tagDelete().setTags(name).call()
+        Unit
+    }
+
+    override suspend fun pushTag(name: String, remote: String, credentials: GitCredentials, delete: Boolean): PushResult = engine.io {
+        val spec = if (delete) RefSpec(":${Constants.R_TAGS}$name") else RefSpec("${Constants.R_TAGS}$name:${Constants.R_TAGS}$name")
+        val cmd = git.push().setRemote(remote).setRefSpecs(spec)
+        engine.applyCredentials(cmd, credentials)
+        PushResult(
+            cmd.call().flatMap { it.remoteUpdates }
+                .filter { it.status != RemoteRefUpdate.Status.OK && it.status != RemoteRefUpdate.Status.UP_TO_DATE }
+                .associate { it.remoteName to (it.message ?: it.status.name) },
+        )
+    }
+
+    override suspend fun reflog(maxCount: Int): List<ReflogEntryInfo> = engine.io {
+        if (repo.resolve(Constants.HEAD) == null) return@io emptyList()
+        git.reflog().setRef(Constants.HEAD).call().take(maxCount).map { e ->
+            ReflogEntryInfo(e.newId.name, e.oldId.name, e.comment, e.who.name, e.who.whenAsInstant)
+        }
+    }
 
     override suspend fun conflictVersions(path: String): ConflictVersions = engine.io {
         val index = repo.readDirCache()

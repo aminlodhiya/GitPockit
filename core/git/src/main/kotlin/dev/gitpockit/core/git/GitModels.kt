@@ -159,3 +159,44 @@ class ConflictVersions(
     /** Version from the remote branch being merged in. */
     val theirs: ByteArray?,
 )
+
+/** A multi-step operation that is paused, usually waiting for conflicts to be resolved. */
+enum class GitOperation { NONE, MERGE, REBASE, CHERRY_PICK, REVERT }
+
+/** Result of merge, rebase, cherry-pick and revert. */
+sealed interface OperationResult {
+    data object UpToDate : OperationResult
+    data object FastForward : OperationResult
+    /** Completed and committed. */
+    data object Done : OperationResult
+    /** Paused with conflicts; resolve them, then continue or abort the operation. */
+    data class Conflicts(val paths: Set<String>) : OperationResult
+}
+
+enum class ResetMode {
+    /** Move the branch only; changes stay staged. */
+    SOFT,
+    /** Move the branch and unstage; changes stay in your files. */
+    MIXED,
+    /** Move the branch and discard all changes. */
+    HARD,
+}
+
+data class StashInfo(val index: Int, val id: String, val message: String, val time: java.time.Instant)
+
+data class TagInfo(
+    val name: String,
+    /** The commit the tag points to. */
+    val commitId: String,
+    val annotated: Boolean,
+    val message: String?,
+    val taggerName: String?,
+    val time: java.time.Instant?,
+)
+
+data class ReflogEntryInfo(val newId: String, val oldId: String, val message: String, val who: String, val time: java.time.Instant)
+
+/** Which side of a conflict is the user's own work. During a rebase Git swaps "ours" and "theirs". */
+fun ConflictVersions.yours(operation: GitOperation): ByteArray? = if (operation == GitOperation.REBASE) theirs else ours
+
+fun ConflictVersions.incoming(operation: GitOperation): ByteArray? = if (operation == GitOperation.REBASE) ours else theirs

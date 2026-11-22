@@ -47,6 +47,8 @@ import dev.gitpockit.core.designsystem.theme.CodeTextStyle
 import dev.gitpockit.core.designsystem.theme.GitPockitTheme
 import dev.gitpockit.core.git.BranchInfo
 import dev.gitpockit.core.git.GitBranchNotMergedException
+import dev.gitpockit.core.git.OperationResult
+import kotlinx.coroutines.flow.receiveAsFlow
 import dev.gitpockit.sync.RepoOps
 import dev.gitpockit.ui.common.ConfirmDialog
 import dev.gitpockit.ui.common.InputDialog
@@ -111,6 +113,31 @@ class BranchesViewModel @Inject constructor(
 
     fun dismissForceDelete() = _state.update { it.copy(confirmForceDelete = null) }
 
+    /** Emits once when an operation stopped with conflicts, so the screen can open the resolver. */
+    private val _conflicts = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
+    val conflicts = _conflicts.receiveAsFlow()
+
+    fun merge(name: String) = operation(context.getString(R.string.merge_done, name)) { it.merge(name) }
+
+    fun rebaseOnto(name: String) = operation(context.getString(R.string.rebase_done, name)) { it.rebase(name) }
+
+    private fun operation(success: String, block: suspend (dev.gitpockit.core.git.GitRepository) -> OperationResult) {
+        viewModelScope.launch {
+            runCatching { ops.write(repoId) { _, git -> block(git) } }
+                .onSuccess { r ->
+                    when (r) {
+                        is OperationResult.Conflicts -> {
+                            message(context.getString(R.string.conflicts_to_resolve, r.paths.size))
+                            _conflicts.trySend(Unit)
+                        }
+                        OperationResult.UpToDate -> message(context.getString(R.string.sync_up_to_date))
+                        else -> message(success)
+                    }
+                }
+                .onFailure { it.report() }
+        }
+    }
+
     private fun act(success: String?, block: suspend (dev.gitpockit.core.git.GitRepository) -> Unit) {
         viewModelScope.launch {
             runCatching { ops.write(repoId) { _, git -> block(git) } }
@@ -121,9 +148,11 @@ class BranchesViewModel @Inject constructor(
 }
 
 @Composable
-fun BranchesTab(showMessage: (String) -> Unit, viewModel: BranchesViewModel = hiltViewModel()) {
+fun BranchesTab(showMessage: (String) -> Unit, onOpenConflicts: () -> Unit, viewModel: BranchesViewModel = hiltViewModel()) {
     val s by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.messages.collect(showMessage) }
+    LaunchedEffect(Unit) { viewModel.conflicts.collect { onOpenConflicts() } }
+    val current = s.local.firstOrNull { it.isCurrent }?.name.orEmpty()
     var creating by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<String?>(null) }
@@ -137,12 +166,14 @@ fun BranchesTab(showMessage: (String) -> Unit, viewModel: BranchesViewModel = hi
                     branch = b,
                     onClick = { if (!b.isCurrent) viewModel.checkout(b.name) },
                     menu = if (b.isCurrent) {
-                        listOf(R.string.action_rename to { renaming = b.name })
+                        listOf(stringResource(R.string.action_rename) to { renaming = b.name })
                     } else {
                         listOf(
-                            R.string.branch_checkout to { viewModel.checkout(b.name) },
-                            R.string.action_rename to { renaming = b.name },
-                            R.string.action_delete to { deleting = b.name },
+                            stringResource(R.string.branch_checkout) to { viewModel.checkout(b.name) },
+                            stringResource(R.string.branch_merge_into_current, current) to { viewModel.merge(b.name) },
+                            stringResource(R.string.branch_rebase_onto, current) to { viewModel.rebaseOnto(b.name) },
+                            stringResource(R.string.action_rename) to { renaming = b.name },
+                            stringResource(R.string.action_delete) to { deleting = b.name },
                         )
                     },
                 )
@@ -150,7 +181,15 @@ fun BranchesTab(showMessage: (String) -> Unit, viewModel: BranchesViewModel = hi
             if (s.remote.isNotEmpty()) {
                 item { SectionTitle(R.string.branches_remote) }
                 items(s.remote, key = { it.fullRef }) { b ->
-                    BranchRow(branch = b, onClick = { viewModel.checkout(b.name) }, menu = listOf(R.string.branch_checkout to { viewModel.checkout(b.name) }))
+                    BranchRow(
+                        branch = b,
+                        onClick = { viewModel.checkout(b.name) },
+                        menu = listOf(
+                            stringResource(R.string.branch_checkout) to { viewModel.checkout(b.name) },
+                            stringResource(R.string.branch_merge_into_current, current) to { viewModel.merge(b.name) },
+                            stringResource(R.string.branch_rebase_onto, current) to { viewModel.rebaseOnto(b.name) },
+                        ),
+                    )
                 }
             }
         }
@@ -222,7 +261,7 @@ internal fun SectionTitle(res: Int) {
 }
 
 @Composable
-private fun BranchRow(branch: BranchInfo, onClick: () -> Unit, menu: List<Pair<Int, () -> Unit>>) {
+private fun BranchRow(branch: BranchInfo, onClick: () -> Unit, menu: List<Pair<String, () -> Unit>>) {
     var open by remember { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
@@ -252,7 +291,7 @@ private fun BranchRow(branch: BranchInfo, onClick: () -> Unit, menu: List<Pair<I
             IconButton(onClick = { open = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.action_more)) }
             DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                 menu.forEach { (label, action) ->
-                    DropdownMenuItem(text = { Text(stringResource(label)) }, onClick = { open = false; action() })
+                    DropdownMenuItem(text = { Text(label) }, onClick = { open = false; action() })
                 }
             }
         }
