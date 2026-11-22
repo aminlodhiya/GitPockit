@@ -30,7 +30,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -174,9 +173,9 @@ fun CloneScreen(
     val s by viewModel.state.collectAsStateWithLifecycle()
     val credentials by viewModel.credentials.collectAsStateWithLifecycle()
     val storageAccess = rememberStorageAccess()
-    val context = LocalContext.current
+    val unsupportedFolder = stringResource(R.string.storage_unsupported_folder)
     val pickFolder = rememberFolderPicker { dir ->
-        if (dir != null) viewModel.pickParent(dir) else viewModel.update { it.copy(error = context.getString(R.string.storage_unsupported_folder)) }
+        if (dir != null) viewModel.pickParent(dir) else viewModel.update { it.copy(error = unsupportedFolder) }
     }
     LaunchedEffect(s.clonedRepoId) { s.clonedRepoId?.let(onCloned) }
     LaunchedEffect(newCredentialId) { newCredentialId?.let(viewModel::selectCredential) }

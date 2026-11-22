@@ -19,6 +19,12 @@ jobs:
         run: ./gradlew :core:git:test --console=plain
       - name: Lint and build debug APK
         run: ./gradlew :app:lintDebug :app:assembleDebug --console=plain
+      - name: Upload lint report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.*
       - uses: actions/upload-artifact@v4
         with:
           name: gitpockit-debug-apk

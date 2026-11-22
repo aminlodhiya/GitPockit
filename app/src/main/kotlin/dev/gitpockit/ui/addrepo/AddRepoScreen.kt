@@ -30,7 +30,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -161,9 +160,9 @@ fun AddRepoScreen(
     val s by viewModel.state.collectAsStateWithLifecycle()
     val credentials by viewModel.credentials.collectAsStateWithLifecycle()
     val storageAccess = rememberStorageAccess()
-    val context = LocalContext.current
+    val unsupportedFolder = stringResource(R.string.storage_unsupported_folder)
     val ext = GitPockitTheme.extendedColors
-    val pickFolder = rememberFolderPicker { viewModel.onFolderPicked(it, context.getString(R.string.storage_unsupported_folder)) }
+    val pickFolder = rememberFolderPicker { viewModel.onFolderPicked(it, unsupportedFolder) }
     LaunchedEffect(s.addedRepoId) { s.addedRepoId?.let(onAdded) }
     LaunchedEffect(newCredentialId) { newCredentialId?.let { id -> viewModel.update { it.copy(credentialId = id) } } }
     LifecycleResumeEffect(storageAccess.granted) {
