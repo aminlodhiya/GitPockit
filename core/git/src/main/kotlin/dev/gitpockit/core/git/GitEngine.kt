@@ -47,6 +47,36 @@ interface GitRepository : AutoCloseable {
 
     suspend fun log(maxCount: Int = 100, path: String? = null, skip: Int = 0): List<CommitInfo>
 
+    /**
+     * History in graph order (topological, newest first) for drawing a commit graph.
+     * With [allRefs], includes every branch and tag instead of only HEAD.
+     */
+    suspend fun graphLog(maxCount: Int = 100, skip: Int = 0, allRefs: Boolean = false): List<CommitInfo>
+
+    /** Branch/tag labels by commit id. */
+    suspend fun refLabels(): Map<String, List<RefLabel>>
+
+    /** Commits whose message, author, email or hash contain [query] (case-insensitive). */
+    suspend fun searchCommits(query: String, maxResults: Int = 200, scanLimit: Int = 20_000): List<CommitInfo>
+
+    /** History of one file, following renames. */
+    suspend fun fileHistory(path: String, maxCount: Int = 500): List<FileHistoryEntry>
+
+    /** Who last changed each line of [path] (in HEAD), following renames. */
+    suspend fun blame(path: String): List<BlameLine>
+
+    /** Changes and commits going from [from] to [to] (branches, tags or commits). */
+    suspend fun compare(from: String, to: String, maxCommits: Int = 500): Comparison
+
+    /** Diff of one file between two revisions. */
+    suspend fun compareFileDiff(from: String, to: String, path: String): FileDiff
+
+    /** Stages only the [selection] of the file's unstaged changes. */
+    suspend fun stageLines(path: String, selection: LineSelection)
+
+    /** Unstages only the [selection] of the file's staged changes (the file itself is untouched). */
+    suspend fun unstageLines(path: String, selection: LineSelection)
+
     /** Commit with the files it changed relative to its first parent. */
     suspend fun commitDetail(commitId: String): CommitDetail
 

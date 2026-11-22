@@ -426,4 +426,26 @@
     <string name="reflog_explain">Every position your branch has been at. If a reset or rebase went wrong, find the commit from before and reset back to it.</string>
     <string name="reflog_empty">No history yet</string>
     <string name="action_view_commit">View commit</string>
+
+    <!-- Phase 3b: history tools -->
+    <string name="history_all_branches">All branches</string>
+    <string name="history_search">Search history</string>
+    <string name="history_search_hint">Message, author or commit hash</string>
+    <string name="history_no_results">No matching commits</string>
+    <string name="file_history">File history</string>
+    <string name="file_history_was">was %1$s</string>
+    <string name="blame">Blame</string>
+    <string name="compare_title">Compare</string>
+    <string name="compare_commits">%1$d commit(s) in %2$s not in %3$s</string>
+    <string name="compare_swap">Swap direction</string>
+    <string name="branch_compare_with">Compare with %1$s</string>
+    <string name="diff_select_hint">Tap lines to select them, then stage only those. Or stage a whole hunk.</string>
+    <string name="diff_select_hint_staged">Tap lines to select them, then unstage only those. Or unstage a whole hunk.</string>
+    <string name="stage_lines">Stage %1$d line(s)</string>
+    <string name="unstage_lines">Unstage %1$d line(s)</string>
+    <string name="stage_hunk">Stage hunk</string>
+    <string name="unstage_hunk">Unstage hunk</string>
+    <string name="lines_staged">Staged %1$d line(s)</string>
+    <string name="lines_unstaged">Unstaged %1$d line(s)</string>
+    <string name="selection_clear">Clear</string>
 </resources>

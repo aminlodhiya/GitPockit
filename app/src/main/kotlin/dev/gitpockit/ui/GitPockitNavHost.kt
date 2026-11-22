@@ -17,7 +17,10 @@ import dev.gitpockit.ui.clone.CloneScreen
 import dev.gitpockit.ui.credentials.AddCredentialScreen
 import dev.gitpockit.ui.credentials.CredentialsScreen
 import dev.gitpockit.ui.home.HomeScreen
+import dev.gitpockit.ui.repo.BlameScreen
 import dev.gitpockit.ui.repo.CommitScreen
+import dev.gitpockit.ui.repo.CompareScreen
+import dev.gitpockit.ui.repo.FileHistoryScreen
 import dev.gitpockit.ui.repo.ConflictsScreen
 import dev.gitpockit.ui.repo.EditConflictScreen
 import dev.gitpockit.ui.repo.ReflogScreen
@@ -39,7 +42,10 @@ object Routes {
     const val REPO = "repo/{repoId}"
     const val REPO_SETTINGS = "repo/{repoId}/settings"
     const val COMMIT = "repo/{repoId}/commit/{commit}"
-    const val DIFF = "repo/{repoId}/diff?path={path}&commit={commit}&staged={staged}"
+    const val DIFF = "repo/{repoId}/diff?path={path}&commit={commit}&staged={staged}&from={from}&to={to}"
+    const val FILE_HISTORY = "repo/{repoId}/file-history?path={path}"
+    const val BLAME = "repo/{repoId}/blame?path={path}"
+    const val COMPARE = "repo/{repoId}/compare?from={from}&to={to}"
     const val CONFLICTS = "repo/{repoId}/conflicts"
     const val EDIT_CONFLICT = "repo/{repoId}/conflicts/edit?path={path}"
     const val SYNC_LOG = "repo/{repoId}/log"
@@ -59,6 +65,11 @@ object Routes {
     fun reflog(id: Long) = "repo/$id/reflog"
     fun diff(id: Long, path: String, commit: String? = null, staged: Boolean = false) =
         "repo/$id/diff?path=${Uri.encode(path)}&commit=${commit.orEmpty()}&staged=$staged"
+    fun compareDiff(id: Long, from: String, to: String, path: String) =
+        "repo/$id/diff?path=${Uri.encode(path)}&from=${Uri.encode(from)}&to=${Uri.encode(to)}"
+    fun fileHistory(id: Long, path: String) = "repo/$id/file-history?path=${Uri.encode(path)}"
+    fun blame(id: Long, path: String) = "repo/$id/blame?path=${Uri.encode(path)}"
+    fun compare(id: Long, from: String, to: String) = "repo/$id/compare?from=${Uri.encode(from)}&to=${Uri.encode(to)}"
 }
 
 /** Key under which the add-credential screen hands the new credential id back to its caller. */
@@ -139,6 +150,7 @@ fun GitPockitNavHost(deepLink: DeepLink? = null, onDeepLinkHandled: () -> Unit =
                 onOpenStashes = { nav.navigate(Routes.stashes(id)) },
                 onOpenTags = { nav.navigate(Routes.tags(id)) },
                 onOpenReflog = { nav.navigate(Routes.reflog(id)) },
+                onCompare = { from, to -> nav.navigate(Routes.compare(id, from, to)) },
             )
         }
         composable(Routes.REPO_SETTINGS, arguments = listOf(repoIdArg)) { entry ->
@@ -188,9 +200,36 @@ fun GitPockitNavHost(deepLink: DeepLink? = null, onDeepLinkHandled: () -> Unit =
                 navArgument("path") { type = NavType.StringType },
                 navArgument("commit") { type = NavType.StringType; defaultValue = "" },
                 navArgument("staged") { type = NavType.BoolType; defaultValue = false },
+                navArgument("from") { type = NavType.StringType; defaultValue = "" },
+                navArgument("to") { type = NavType.StringType; defaultValue = "" },
             ),
-        ) {
-            DiffScreen(onBack = { nav.popBackStack() })
+        ) { entry ->
+            val id = checkNotNull(entry.arguments?.getLong("repoId"))
+            DiffScreen(
+                onBack = { nav.popBackStack() },
+                onFileHistory = { nav.navigate(Routes.fileHistory(id, it)) },
+                onBlame = { nav.navigate(Routes.blame(id, it)) },
+            )
+        }
+        composable(Routes.FILE_HISTORY, arguments = listOf(repoIdArg, navArgument("path") { type = NavType.StringType })) { entry ->
+            val id = checkNotNull(entry.arguments?.getLong("repoId"))
+            FileHistoryScreen(onBack = { nav.popBackStack() }, onOpenDiff = { commit, path -> nav.navigate(Routes.diff(id, path, commit = commit)) })
+        }
+        composable(Routes.BLAME, arguments = listOf(repoIdArg, navArgument("path") { type = NavType.StringType })) { entry ->
+            val id = checkNotNull(entry.arguments?.getLong("repoId"))
+            BlameScreen(onBack = { nav.popBackStack() }, onOpenCommit = { nav.navigate(Routes.commit(id, it)) })
+        }
+        composable(
+            Routes.COMPARE,
+            arguments = listOf(repoIdArg, navArgument("from") { type = NavType.StringType }, navArgument("to") { type = NavType.StringType }),
+        ) { entry ->
+            val id = checkNotNull(entry.arguments?.getLong("repoId"))
+            CompareScreen(
+                onBack = { nav.popBackStack() },
+                onSwap = { from, to -> nav.navigate(Routes.compare(id, from, to)) { popUpTo(Routes.COMPARE) { inclusive = true } } },
+                onOpenCommit = { nav.navigate(Routes.commit(id, it)) },
+                onOpenDiff = { from, to, path -> nav.navigate(Routes.compareDiff(id, from, to, path)) },
+            )
         }
     }
 }

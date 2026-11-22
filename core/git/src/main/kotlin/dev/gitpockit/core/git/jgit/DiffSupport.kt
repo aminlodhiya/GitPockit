@@ -38,7 +38,9 @@ internal object UnifiedDiffParser {
             lines = null
         }
 
-        for (raw in text.lineSequence()) {
+        // Split on '\n' only, exactly like Git counts lines (lineSequence() would also split on a
+        // lone '\r' and shift line numbers). A CRLF's '\r' is dropped for display only.
+        for (raw in text.split('\n')) {
             val match = HUNK.matchEntire(raw)
             when {
                 match != null -> {
@@ -49,9 +51,9 @@ internal object UnifiedDiffParser {
                     lines = mutableListOf()
                 }
                 lines == null -> if (raw.startsWith("Binary files")) binary = true
-                raw.startsWith("+") -> lines!! += DiffLine(DiffLineType.ADDED, raw.substring(1), null, newNo++)
-                raw.startsWith("-") -> lines!! += DiffLine(DiffLineType.REMOVED, raw.substring(1), oldNo++, null)
-                raw.startsWith(" ") -> lines!! += DiffLine(DiffLineType.CONTEXT, raw.substring(1), oldNo++, newNo++)
+                raw.startsWith("+") -> lines!! += DiffLine(DiffLineType.ADDED, raw.substring(1).removeSuffix("\r"), null, newNo++)
+                raw.startsWith("-") -> lines!! += DiffLine(DiffLineType.REMOVED, raw.substring(1).removeSuffix("\r"), oldNo++, null)
+                raw.startsWith(" ") -> lines!! += DiffLine(DiffLineType.CONTEXT, raw.substring(1).removeSuffix("\r"), oldNo++, newNo++)
                 // "\ No newline at end of file" and the trailing empty line carry no content.
                 else -> Unit
             }

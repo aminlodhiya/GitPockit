@@ -4,7 +4,7 @@
 
 GitPockit is a free, open-source Git client for Android. Keep any folder on your phone — notes, an Obsidian vault, dotfiles, docs, code — in sync with a Git repository, and use the full power of Git from your phone.
 
-> Status: **early development (v0.4, Phase 3a)**. Core Git, automatic background sync and advanced Git operations work. Expect breaking changes.
+> Status: **early development (v0.5, Phase 3b)**. Core Git, automatic background sync, advanced Git operations and history tools work. Expect breaking changes.
 
 ## Features
 
@@ -13,7 +13,9 @@ GitPockit is a free, open-source Git client for Android. Keep any folder on your
 - Credentials stored encrypted with the Android Keystore: HTTPS personal access tokens, SSH keys generated on the device (Ed25519 / RSA 4096) or imported; host keys are trusted on first use and pinned
 - Changes: stage / unstage single files or everything, discard changes, commit, amend
 - Diff viewer with line numbers for working-tree, staged and committed changes
-- History with commit details and per-file diffs
+- History with a **commit graph** (lanes, branch & tag labels, all-branches view), **search** by message/author/hash, commit details and per-file diffs
+- **File history** (follows renames), **blame**, **compare** two branches/commits
+- **Stage or unstage individual lines or hunks** from the diff view
 - Branches: create, switch (including remote branches), rename, delete, **merge** and **rebase**
 - **Stash** (save with message, include new files, apply, pop, drop), **tags** (lightweight/annotated, push, delete locally or on the remote, check out)
 - Commit actions: **cherry-pick**, **revert**, **reset** (soft / mixed / hard), check out a commit
@@ -29,8 +31,8 @@ GitPockit is a free, open-source Git client for Android. Keep any folder on your
 - Premium dark theme (default), simple light theme, AMOLED black, optional Material You colors
 
 **On the roadmap**
-- Blame, file history, commit graph, submodules, Git LFS
-- Hunk- and line-level staging, commit graph, diffs, file explorer and code editor
+- Submodules, Git LFS
+- File explorer and code editor
 - GitHub / GitLab / Gitea sign-in, issues, pull requests and CI runs
 - Signed commits, biometric lock, backup/restore
 - Opt-in AI helpers with your own API key (hidden by default)

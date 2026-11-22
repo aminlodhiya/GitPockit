@@ -148,7 +148,12 @@ class BranchesViewModel @Inject constructor(
 }
 
 @Composable
-fun BranchesTab(showMessage: (String) -> Unit, onOpenConflicts: () -> Unit, viewModel: BranchesViewModel = hiltViewModel()) {
+fun BranchesTab(
+    showMessage: (String) -> Unit,
+    onOpenConflicts: () -> Unit,
+    onCompare: (from: String, to: String) -> Unit,
+    viewModel: BranchesViewModel = hiltViewModel(),
+) {
     val s by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.messages.collect(showMessage) }
     LaunchedEffect(Unit) { viewModel.conflicts.collect { onOpenConflicts() } }
@@ -172,6 +177,7 @@ fun BranchesTab(showMessage: (String) -> Unit, onOpenConflicts: () -> Unit, view
                             stringResource(R.string.branch_checkout) to { viewModel.checkout(b.name) },
                             stringResource(R.string.branch_merge_into_current, current) to { viewModel.merge(b.name) },
                             stringResource(R.string.branch_rebase_onto, current) to { viewModel.rebaseOnto(b.name) },
+                            stringResource(R.string.branch_compare_with, current) to { onCompare(current, b.name) },
                             stringResource(R.string.action_rename) to { renaming = b.name },
                             stringResource(R.string.action_delete) to { deleting = b.name },
                         )
@@ -188,6 +194,7 @@ fun BranchesTab(showMessage: (String) -> Unit, onOpenConflicts: () -> Unit, view
                             stringResource(R.string.branch_checkout) to { viewModel.checkout(b.name) },
                             stringResource(R.string.branch_merge_into_current, current) to { viewModel.merge(b.name) },
                             stringResource(R.string.branch_rebase_onto, current) to { viewModel.rebaseOnto(b.name) },
+                            stringResource(R.string.branch_compare_with, current) to { onCompare(current, b.name) },
                         ),
                     )
                 }

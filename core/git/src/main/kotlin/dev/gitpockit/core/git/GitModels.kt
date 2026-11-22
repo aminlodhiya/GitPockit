@@ -200,3 +200,29 @@ data class ReflogEntryInfo(val newId: String, val oldId: String, val message: St
 fun ConflictVersions.yours(operation: GitOperation): ByteArray? = if (operation == GitOperation.REBASE) theirs else ours
 
 fun ConflictVersions.incoming(operation: GitOperation): ByteArray? = if (operation == GitOperation.REBASE) ours else theirs
+
+enum class RefKind { HEAD, LOCAL_BRANCH, REMOTE_BRANCH, TAG }
+
+/** A branch/tag name shown next to a commit in history. */
+data class RefLabel(val name: String, val kind: RefKind)
+
+/** A commit in a file's history, with the file's path at that commit (it may have been renamed since). */
+data class FileHistoryEntry(val commit: CommitInfo, val path: String)
+
+data class BlameLine(
+    /** 1-based line number in the current file. */
+    val line: Int,
+    val text: String,
+    val commitId: String?,
+    val authorName: String?,
+    val time: java.time.Instant?,
+    val summary: String?,
+)
+
+/** What changed between two revisions, plus the commits reachable from [to] but not [from]. */
+data class Comparison(val from: String, val to: String, val changes: List<FileChange>, val commits: List<CommitInfo>)
+
+/** Lines picked in a diff: removed lines by old line number, added lines by new line number (1-based). */
+data class LineSelection(val oldLines: Set<Int> = emptySet(), val newLines: Set<Int> = emptySet()) {
+    val isEmpty: Boolean get() = oldLines.isEmpty() && newLines.isEmpty()
+}

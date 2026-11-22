@@ -189,6 +189,7 @@ fun RepoScreen(
     onOpenStashes: () -> Unit,
     onOpenTags: () -> Unit,
     onOpenReflog: () -> Unit,
+    onCompare: (from: String, to: String) -> Unit,
     viewModel: RepoViewModel = hiltViewModel(),
 ) {
     val s by viewModel.state.collectAsStateWithLifecycle()
@@ -304,7 +305,7 @@ fun RepoScreen(
             when (page) {
                 0 -> ChangesTab(onOpenDiff = onOpenDiff, onOpenConflicts = onOpenConflicts, showMessage = showMessage)
                 1 -> HistoryTab(onOpenCommit = onOpenCommit, showMessage = showMessage)
-                2 -> BranchesTab(showMessage = showMessage, onOpenConflicts = onOpenConflicts)
+                2 -> BranchesTab(showMessage = showMessage, onOpenConflicts = onOpenConflicts, onCompare = onCompare)
                 else -> RemotesTab(showMessage = showMessage)
             }
         }

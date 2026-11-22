@@ -2,7 +2,13 @@ package dev.gitpockit.core.git.jgit
 
 import dev.gitpockit.core.git.BranchInfo
 import dev.gitpockit.core.git.ChangeType
+import dev.gitpockit.core.git.BlameLine
 import dev.gitpockit.core.git.CommitDetail
+import dev.gitpockit.core.git.Comparison
+import dev.gitpockit.core.git.FileHistoryEntry
+import dev.gitpockit.core.git.LineSelection
+import dev.gitpockit.core.git.RefKind
+import dev.gitpockit.core.git.RefLabel
 import dev.gitpockit.core.git.ConflictVersions
 import dev.gitpockit.core.git.GitLocalChangesException
 import dev.gitpockit.core.git.GitOperation
@@ -39,6 +45,11 @@ import org.eclipse.jgit.api.errors.RefNotAdvertisedException
 import org.eclipse.jgit.diff.DiffEntry
 import org.eclipse.jgit.diff.DiffFormatter
 import org.eclipse.jgit.diff.DiffAlgorithm
+import org.eclipse.jgit.diff.DiffConfig
+import org.eclipse.jgit.dircache.DirCacheEditor
+import org.eclipse.jgit.lib.FileMode
+import org.eclipse.jgit.revwalk.FollowFilter
+import org.eclipse.jgit.revwalk.RevSort
 import org.eclipse.jgit.diff.RawText
 import org.eclipse.jgit.diff.RawTextComparator
 import org.eclipse.jgit.lib.BranchTrackingStatus
@@ -132,6 +143,162 @@ internal class JGitRepository(
         val cmd = git.log().setMaxCount(maxCount).setSkip(skip)
         path?.let { cmd.addPath(it) }
         cmd.call().map { it.toInfo() }
+    }
+
+    override suspend fun graphLog(maxCount: Int, skip: Int, allRefs: Boolean): List<CommitInfo> = engine.io {
+        val head = repo.resolve(Constants.HEAD) ?: return@io emptyList()
+        RevWalk(repo).use { walk ->
+            walk.sort(RevSort.TOPO, true)
+            walk.sort(RevSort.COMMIT_TIME_DESC, true)
+            if (allRefs) {
+                repo.refDatabase.getRefsByPrefix(Constants.R_REFS)
+                    .filterNot { it.name.startsWith(Constants.R_STASH) }
+                    .mapNotNull { ref -> runCatching { walk.parseCommit(repo.refDatabase.peel(ref).peeledObjectId ?: ref.objectId) }.getOrNull() }
+                    .forEach(walk::markStart)
+            }
+            walk.markStart(walk.parseCommit(head))
+            walk.asSequence().drop(skip).take(maxCount).map { it.toInfo() }.toList()
+        }
+    }
+
+    override suspend fun refLabels(): Map<String, List<RefLabel>> = engine.io {
+        val labels = HashMap<String, MutableList<RefLabel>>()
+        fun add(id: String?, label: RefLabel) { if (id != null) labels.getOrPut(id) { mutableListOf() } += label }
+        val db = repo.refDatabase
+        val head = db.exactRef(Constants.HEAD)
+        if (head != null && !head.isSymbolic) add(head.objectId?.name, RefLabel("HEAD", RefKind.HEAD))
+        db.getRefsByPrefix(Constants.R_HEADS).forEach { add(it.objectId?.name, RefLabel(Repository.shortenRefName(it.name), RefKind.LOCAL_BRANCH)) }
+        db.getRefsByPrefix(Constants.R_REMOTES).filterNot { it.name.endsWith("/HEAD") }
+            .forEach { add(it.objectId?.name, RefLabel(Repository.shortenRefName(it.name), RefKind.REMOTE_BRANCH)) }
+        db.getRefsByPrefix(Constants.R_TAGS).forEach { ref ->
+            val target = db.peel(ref).peeledObjectId ?: ref.objectId
+            add(target?.name, RefLabel(Repository.shortenRefName(ref.name), RefKind.TAG))
+        }
+        labels
+    }
+
+    override suspend fun searchCommits(query: String, maxResults: Int, scanLimit: Int): List<CommitInfo> = engine.io {
+        val q = query.trim().lowercase()
+        val head = repo.resolve(Constants.HEAD)
+        if (q.isEmpty() || head == null) return@io emptyList()
+        RevWalk(repo).use { walk ->
+            walk.sort(RevSort.COMMIT_TIME_DESC)
+            walk.markStart(walk.parseCommit(head))
+            walk.asSequence().take(scanLimit).filter { c ->
+                c.name.startsWith(q) ||
+                    c.fullMessage.lowercase().contains(q) ||
+                    c.authorIdent.name.lowercase().contains(q) ||
+                    c.authorIdent.emailAddress.lowercase().contains(q)
+            }.take(maxResults).map { it.toInfo() }.toList()
+        }
+    }
+
+    override suspend fun fileHistory(path: String, maxCount: Int): List<FileHistoryEntry> = engine.io {
+        val head = repo.resolve(Constants.HEAD) ?: return@io emptyList()
+        val result = mutableListOf<FileHistoryEntry>()
+        var current = path
+        RevWalk(repo).use { walk ->
+            walk.markStart(walk.parseCommit(head))
+            walk.setTreeFilter(FollowFilter.create(path, repo.config.get(DiffConfig.KEY)))
+            for (commit in walk) {
+                if (result.size >= maxCount) break
+                val body = walk.parseCommit(commit)
+                result += FileHistoryEntry(body.toInfo(), current)
+                // If this commit renamed the file, older commits know it by its previous name.
+                commitEntries(walk, body).firstOrNull { it.newPath == current && it.changeType == DiffEntry.ChangeType.RENAME }
+                    ?.let { current = it.oldPath }
+            }
+        }
+        result
+    }
+
+    override suspend fun blame(path: String): List<BlameLine> = engine.io {
+        val result = git.blame().setFilePath(path).setFollowFileRenames(true).call()
+            ?: throw GitException("$path is not in the last commit")
+        val text = result.resultContents
+        (0 until text.size()).map { i ->
+            val c = result.getSourceCommit(i)
+            BlameLine(
+                line = i + 1,
+                text = text.getString(i),
+                commitId = c?.name,
+                authorName = c?.authorIdent?.name,
+                time = c?.let { Instant.ofEpochSecond(it.commitTime.toLong()) },
+                summary = c?.shortMessage,
+            )
+        }
+    }
+
+    override suspend fun compare(from: String, to: String, maxCommits: Int): Comparison = engine.io {
+        RevWalk(repo).use { walk ->
+            val a = walk.parseCommit(resolveCommit(from))
+            val b = walk.parseCommit(resolveCommit(to))
+            val changes = DiffFormatter(NullOutputStream.INSTANCE).use { f ->
+                f.setRepository(repo)
+                f.isDetectRenames = true
+                f.scan(a.tree, b.tree)
+            }.map { e -> FileChange(e.displayPath, e.oldPath.takeIf { e.changeType.isMove }, e.changeType.toChangeType()) }
+            walk.reset()
+            walk.markStart(b)
+            walk.markUninteresting(a)
+            val commits = walk.asSequence().take(maxCommits).map { it.toInfo() }.toList()
+            Comparison(from, to, changes, commits)
+        }
+    }
+
+    override suspend fun compareFileDiff(from: String, to: String, path: String): FileDiff = engine.io {
+        RevWalk(repo).use { walk ->
+            val a = walk.parseCommit(resolveCommit(from))
+            val b = walk.parseCommit(resolveCommit(to))
+            val entry = DiffFormatter(NullOutputStream.INSTANCE).use { f ->
+                f.setRepository(repo)
+                f.isDetectRenames = true
+                f.scan(a.tree, b.tree)
+            }.firstOrNull { it.newPath == path || it.oldPath == path }
+                ?: return@io FileDiff(path, null, ChangeType.MODIFIED, isBinary = false, hunks = emptyList())
+            formatEntries(listOf(entry)).single()
+        }
+    }
+
+    override suspend fun stageLines(path: String, selection: LineSelection) = engine.io {
+        if (selection.isEmpty) return@io
+        val index = repo.readDirCache().getEntry(path)
+        val base = index?.objectId?.let { repo.open(it).bytes } ?: ByteArray(0)
+        val file = File(repo.workTree, path)
+        val target = if (file.isFile) file.readBytes() else ByteArray(0)
+        writeIndexEntry(path, PartialStaging.apply(base, target, selection), index?.fileMode ?: FileMode.REGULAR_FILE)
+    }
+
+    override suspend fun unstageLines(path: String, selection: LineSelection) = engine.io {
+        if (selection.isEmpty) return@io
+        val index = repo.readDirCache().getEntry(path) ?: return@io
+        val staged = repo.open(index.objectId).bytes
+        val head = headBlob(path) ?: ByteArray(0)
+        // Keep every staged change except the selected ones: apply the complement of the selection.
+        val all = PartialStaging.everything(head, staged)
+        val keep = LineSelection(all.oldLines - selection.oldLines, all.newLines - selection.newLines)
+        writeIndexEntry(path, PartialStaging.apply(head, staged, keep), index.fileMode)
+    }
+
+    /** Replaces the index (staging area) version of [path] without touching the file itself. */
+    private fun writeIndexEntry(path: String, content: ByteArray, mode: FileMode) {
+        val blobId = repo.newObjectInserter().use { ins -> ins.insert(Constants.OBJ_BLOB, content).also { ins.flush() } }
+        val dirCache = repo.lockDirCache()
+        try {
+            val editor = dirCache.editor()
+            editor.add(object : DirCacheEditor.PathEdit(path) {
+                override fun apply(ent: DirCacheEntry) {
+                    ent.setObjectId(blobId)
+                    ent.fileMode = mode
+                    ent.setLength(content.size)
+                    // An unknown timestamp makes Git compare contents, so the file shows as changed again.
+                    ent.setLastModified(Instant.EPOCH)
+                }
+            })
+            editor.commit()
+        } finally {
+            dirCache.unlock()
+        }
     }
 
     override suspend fun commitDetail(commitId: String): CommitDetail = engine.io {
