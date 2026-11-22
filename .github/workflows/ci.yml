@@ -15,16 +15,18 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
-      - name: Git engine tests
-        run: ./gradlew :core:git:test --console=plain
+      - name: Unit tests (Git engine, data, sync engine)
+        run: ./gradlew :core:git:test :core:data:testDebugUnitTest :sync:testDebugUnitTest --console=plain
       - name: Lint and build debug APK
         run: ./gradlew :app:lintDebug :app:assembleDebug --console=plain
-      - name: Upload lint report
+      - name: Upload test and lint reports
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: lint-report
-          path: app/build/reports/lint-results-debug.*
+          name: reports
+          path: |
+            app/build/reports/lint-results-debug.*
+            **/build/reports/tests/
       - uses: actions/upload-artifact@v4
         with:
           name: gitpockit-debug-apk

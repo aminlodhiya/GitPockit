@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -35,8 +36,45 @@ interface RepoDao {
     @Query("UPDATE repos SET credentialId = :credentialId WHERE id = :id")
     suspend fun setCredential(id: Long, credentialId: Long?)
 
-    @Query("UPDATE repos SET lastSyncAt = :at, lastError = :error WHERE id = :id")
-    suspend fun setSyncResult(id: Long, at: Long, error: String?)
+    @Query("UPDATE repos SET lastSyncAt = :at, lastError = :error, pendingSync = :pending WHERE id = :id")
+    suspend fun setSyncResult(id: Long, at: Long, error: String?, pending: Boolean)
+
+    @Query("SELECT * FROM repos")
+    suspend fun all(): List<RepoEntity>
+}
+
+@Dao
+interface SyncLogDao {
+    @Query("SELECT * FROM sync_log WHERE repoId = :repoId ORDER BY startedAt DESC LIMIT :limit")
+    fun observe(repoId: Long, limit: Int = 200): Flow<List<SyncLogEntity>>
+
+    @Insert
+    suspend fun insert(entry: SyncLogEntity): Long
+
+    /** Keeps only the newest [keep] entries per repo. */
+    @Query(
+        "DELETE FROM sync_log WHERE repoId = :repoId AND id NOT IN " +
+            "(SELECT id FROM sync_log WHERE repoId = :repoId ORDER BY startedAt DESC LIMIT :keep)",
+    )
+    suspend fun prune(repoId: Long, keep: Int = 200)
+}
+
+@Dao
+interface AppTriggerDao {
+    @Query("SELECT * FROM app_triggers")
+    fun observeAll(): Flow<List<AppTriggerEntity>>
+
+    @Query("SELECT * FROM app_triggers")
+    suspend fun all(): List<AppTriggerEntity>
+
+    @Query("SELECT * FROM app_triggers WHERE repoId = :repoId")
+    fun observeForRepo(repoId: Long): Flow<List<AppTriggerEntity>>
+
+    @Upsert
+    suspend fun upsert(trigger: AppTriggerEntity)
+
+    @Query("DELETE FROM app_triggers WHERE packageName = :packageName AND repoId = :repoId")
+    suspend fun delete(packageName: String, repoId: Long)
 }
 
 @Dao

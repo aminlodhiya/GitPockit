@@ -3,6 +3,7 @@ package dev.gitpockit.core.git.jgit
 import dev.gitpockit.core.git.BranchInfo
 import dev.gitpockit.core.git.ChangeType
 import dev.gitpockit.core.git.CommitDetail
+import dev.gitpockit.core.git.ConflictVersions
 import dev.gitpockit.core.git.FileChange
 import dev.gitpockit.core.git.FileDiff
 import dev.gitpockit.core.git.WorkingDiffMode
@@ -22,6 +23,7 @@ import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.ListBranchCommand
 import org.eclipse.jgit.api.MergeResult
 import org.eclipse.jgit.api.RebaseResult
+import org.eclipse.jgit.api.ResetCommand
 import org.eclipse.jgit.api.errors.RefNotAdvertisedException
 import org.eclipse.jgit.diff.DiffEntry
 import org.eclipse.jgit.diff.DiffFormatter
@@ -29,7 +31,9 @@ import org.eclipse.jgit.diff.DiffAlgorithm
 import org.eclipse.jgit.diff.RawText
 import org.eclipse.jgit.diff.RawTextComparator
 import org.eclipse.jgit.lib.BranchTrackingStatus
+import org.eclipse.jgit.dircache.DirCacheEntry
 import org.eclipse.jgit.lib.RefUpdate
+import org.eclipse.jgit.lib.RepositoryState
 import org.eclipse.jgit.revwalk.RevWalk
 import org.eclipse.jgit.transport.RemoteConfig
 import org.eclipse.jgit.treewalk.TreeWalk
@@ -383,6 +387,45 @@ internal class JGitRepository(
             link.link(if (target.startsWith(oldPrefix)) newPrefix + target.removePrefix(oldPrefix) else target)
             repo.updateRef(ref.name, true).apply { isForceUpdate = true }.delete()
         }
+    }
+
+    override suspend fun isMerging(): Boolean = engine.io { repo.repositoryState == RepositoryState.MERGING }
+
+    override suspend fun conflictVersions(path: String): ConflictVersions = engine.io {
+        val index = repo.readDirCache()
+        var base: ByteArray? = null
+        var ours: ByteArray? = null
+        var theirs: ByteArray? = null
+        var i = index.findEntry(path)
+        while (i in 0 until index.entryCount && index.getEntry(i).pathString == path) {
+            val entry = index.getEntry(i)
+            val bytes = repo.open(entry.objectId).bytes
+            when (entry.stage) {
+                DirCacheEntry.STAGE_1 -> base = bytes
+                DirCacheEntry.STAGE_2 -> ours = bytes
+                DirCacheEntry.STAGE_3 -> theirs = bytes
+            }
+            i++
+        }
+        ConflictVersions(path, base, ours, theirs)
+    }
+
+    override suspend fun resolveConflict(path: String, content: ByteArray?) = engine.io {
+        val file = File(repo.workTree, path)
+        if (content != null) {
+            file.parentFile?.mkdirs()
+            file.writeBytes(content)
+            git.add().addFilepattern(path).call()
+        } else {
+            file.delete()
+            git.rm().addFilepattern(path).call()
+        }
+        Unit
+    }
+
+    override suspend fun abortMerge() = engine.io {
+        git.reset().setMode(ResetCommand.ResetType.HARD).setRef(Constants.HEAD).call()
+        Unit
     }
 
     override suspend fun aheadBehind(): Pair<Int, Int>? = engine.io {

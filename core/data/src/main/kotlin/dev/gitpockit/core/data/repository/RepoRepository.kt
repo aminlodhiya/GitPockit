@@ -1,7 +1,16 @@
 package dev.gitpockit.core.data.repository
 
 import androidx.room.withTransaction
+import dev.gitpockit.core.data.db.AppTriggerEntity
 import dev.gitpockit.core.data.db.ContainerEntity
+import dev.gitpockit.core.data.db.SyncLogEntity
+import dev.gitpockit.core.data.model.AppTrigger
+import dev.gitpockit.core.data.model.ConflictStrategy
+import dev.gitpockit.core.data.model.SyncLogEntry
+import dev.gitpockit.core.data.model.SyncMode
+import dev.gitpockit.core.data.model.SyncResult
+import dev.gitpockit.core.data.model.SyncSettings
+import dev.gitpockit.core.data.model.SyncTrigger
 import dev.gitpockit.core.data.db.GitPockitDatabase
 import dev.gitpockit.core.data.db.RepoEntity
 import dev.gitpockit.core.data.model.Container
@@ -15,6 +24,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.File
 
+private const val MINUTES_PER_DAY = 24 * 60
+
 /** The list of repositories GitPockit manages, wherever they live on the device, and their containers. */
 class RepoRepository(
     private val db: GitPockitDatabase,
@@ -23,6 +34,8 @@ class RepoRepository(
 ) {
     private val repoDao = db.repoDao()
     private val containerDao = db.containerDao()
+    private val logDao = db.syncLogDao()
+    private val triggerDao = db.appTriggerDao()
 
     val repos: Flow<List<Repo>> = repoDao.observeAll().map { list -> list.map { it.toModel() } }
 
@@ -85,7 +98,86 @@ class RepoRepository(
         repoDao.update(repo.copy(remoteName = remote))
     }
 
-    suspend fun recordSync(id: Long, error: String?) = repoDao.setSyncResult(id, clock(), error)
+    suspend fun all(): List<Repo> = repoDao.all().map { it.toModel() }
+
+    /** Stores the outcome of a sync. [pending] marks local work still waiting to be pushed. */
+    suspend fun recordSync(id: Long, error: String?, pending: Boolean = false) =
+        repoDao.setSyncResult(id, clock(), error, pending)
+
+    suspend fun updateSyncSettings(id: Long, settings: SyncSettings) {
+        val repo = repoDao.get(id) ?: return
+        repoDao.update(
+            repo.copy(
+                syncMode = settings.mode.name,
+                conflictStrategy = settings.conflictStrategy.name,
+                commitTemplate = settings.commitTemplate?.takeIf { it.isNotBlank() },
+                syncIntervalMinutes = settings.intervalMinutes,
+                syncOnChange = settings.onFileChange,
+                wifiOnly = settings.wifiOnly,
+                syncTimes = encodeTimes(settings.dailyTimes),
+            ),
+        )
+    }
+
+    // ---- Sync log
+
+    fun observeLog(repoId: Long): Flow<List<SyncLogEntry>> = logDao.observe(repoId).map { list ->
+        list.map {
+            SyncLogEntry(
+                id = it.id,
+                repoId = it.repoId,
+                trigger = enumOr(it.trigger, SyncTrigger.MANUAL),
+                startedAt = it.startedAt,
+                durationMs = it.durationMs,
+                result = enumOr(it.result, SyncResult.FAILED),
+                message = it.message,
+            )
+        }
+    }
+
+    suspend fun addLog(repoId: Long, trigger: SyncTrigger, startedAt: Long, result: SyncResult, message: String?) {
+        logDao.insert(
+            SyncLogEntity(
+                repoId = repoId,
+                trigger = trigger.name,
+                startedAt = startedAt,
+                durationMs = clock() - startedAt,
+                result = result.name,
+                message = message,
+            ),
+        )
+        logDao.prune(repoId)
+    }
+
+    // ---- App triggers
+
+    val appTriggers: Flow<List<AppTrigger>> = triggerDao.observeAll().map { list -> list.map { it.toModel() } }
+
+    suspend fun allAppTriggers(): List<AppTrigger> = triggerDao.all().map { it.toModel() }
+
+    fun observeAppTriggers(repoId: Long): Flow<List<AppTrigger>> =
+        triggerDao.observeForRepo(repoId).map { list -> list.map { it.toModel() } }
+
+    suspend fun setAppTrigger(trigger: AppTrigger) {
+        if (!trigger.onOpen && !trigger.onClose) {
+            triggerDao.delete(trigger.packageName, trigger.repoId)
+        } else {
+            triggerDao.upsert(AppTriggerEntity(trigger.packageName, trigger.repoId, trigger.onOpen, trigger.onClose))
+        }
+    }
+
+    suspend fun removeAppTrigger(packageName: String, repoId: Long) = triggerDao.delete(packageName, repoId)
+
+    private fun encodeTimes(times: List<Int>): String =
+        times.filter { it in 0 until MINUTES_PER_DAY }.distinct().sorted().joinToString(",")
+
+    private fun decodeTimes(raw: String): List<Int> =
+        raw.split(',').mapNotNull { it.trim().toIntOrNull() }.filter { it in 0 until MINUTES_PER_DAY }.distinct().sorted()
+
+    private fun AppTriggerEntity.toModel() = AppTrigger(packageName, repoId, onOpen, onClose)
+
+    private inline fun <reified E : Enum<E>> enumOr(name: String, fallback: E): E =
+        runCatching { enumValueOf<E>(name) }.getOrDefault(fallback)
 
     suspend fun createContainer(name: String): Long =
         db.withTransaction { containerDao.insert(ContainerEntity(name = name.trim(), position = containerDao.nextPosition())) }
@@ -106,5 +198,15 @@ class RepoRepository(
         authorEmail = authorEmail,
         lastSyncAt = lastSyncAt,
         lastError = lastError,
+        sync = SyncSettings(
+            mode = enumOr(syncMode, SyncMode.FULL),
+            conflictStrategy = enumOr(conflictStrategy, ConflictStrategy.ASK),
+            commitTemplate = commitTemplate,
+            intervalMinutes = syncIntervalMinutes,
+            onFileChange = syncOnChange,
+            wifiOnly = wifiOnly,
+            dailyTimes = decodeTimes(syncTimes),
+        ),
+        pendingSync = pendingSync,
     )
 }

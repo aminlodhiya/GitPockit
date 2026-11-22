@@ -42,7 +42,7 @@ import dev.gitpockit.core.designsystem.theme.CodeTextStyle
 import dev.gitpockit.core.designsystem.theme.GitPockitTheme
 import dev.gitpockit.core.git.ChangeType
 import dev.gitpockit.core.git.CommitDetail
-import dev.gitpockit.domain.RepoOps
+import dev.gitpockit.sync.RepoOps
 import dev.gitpockit.ui.credentials.copyToClipboard
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

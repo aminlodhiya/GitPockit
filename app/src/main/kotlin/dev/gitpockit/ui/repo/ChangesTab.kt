@@ -53,7 +53,7 @@ import dev.gitpockit.core.designsystem.theme.CodeTextStyle
 import dev.gitpockit.core.designsystem.theme.GitPockitTheme
 import dev.gitpockit.core.git.GitRepository
 import dev.gitpockit.core.git.RepoStatus
-import dev.gitpockit.domain.RepoOps
+import dev.gitpockit.sync.RepoOps
 import dev.gitpockit.ui.common.ConfirmDialog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -156,6 +156,7 @@ class ChangesViewModel @Inject constructor(
 @Composable
 fun ChangesTab(
     onOpenDiff: (path: String, staged: Boolean) -> Unit,
+    onOpenConflicts: () -> Unit,
     showMessage: (String) -> Unit,
     viewModel: ChangesViewModel = hiltViewModel(),
 ) {
@@ -179,7 +180,7 @@ fun ChangesTab(
                     title = R.string.section_conflicts,
                     entries = s.conflicts,
                     hint = R.string.conflict_hint,
-                    action = R.string.action_stage_all to { viewModel.stage(s.conflicts.map { it.path }) },
+                    action = R.string.resolve_conflicts to onOpenConflicts,
                     rowAction = { e -> RowAction(Icons.Default.Add, R.string.action_stage) { viewModel.stage(listOf(e.path)) } },
                     onClick = { onOpenDiff(it.path, false) },
                     onDiscard = { discard = it.path },

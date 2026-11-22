@@ -50,7 +50,7 @@ import dev.gitpockit.core.git.DiffLine
 import dev.gitpockit.core.git.DiffLineType
 import dev.gitpockit.core.git.FileDiff
 import dev.gitpockit.core.git.WorkingDiffMode
-import dev.gitpockit.domain.RepoOps
+import dev.gitpockit.sync.RepoOps
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch

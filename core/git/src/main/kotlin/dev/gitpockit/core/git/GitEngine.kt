@@ -101,6 +101,20 @@ interface GitRepository : AutoCloseable {
     /** Renames a remote, its remote-tracking branches and every branch's upstream pointing at it. */
     suspend fun renameRemote(oldName: String, newName: String)
 
+    /** True while a merge is in progress (after a pull with conflicts, before the merge commit). */
+    suspend fun isMerging(): Boolean
+
+    suspend fun conflictVersions(path: String): ConflictVersions
+
+    /**
+     * Resolves a conflicted file by writing [content] to it (or deleting it when null) and staging it.
+     * Commit once every conflict is resolved to finish the merge.
+     */
+    suspend fun resolveConflict(path: String, content: ByteArray?)
+
+    /** Abandons an in-progress merge, restoring the last local commit (`git merge --abort`). */
+    suspend fun abortMerge()
+
     /** Number of commits (ahead, behind) of the current branch relative to its upstream. */
     suspend fun aheadBehind(): Pair<Int, Int>?
 }

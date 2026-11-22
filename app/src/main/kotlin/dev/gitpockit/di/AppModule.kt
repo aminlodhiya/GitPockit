@@ -9,6 +9,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import dev.gitpockit.background.AndroidNetworkStatus
 import dev.gitpockit.core.data.db.GitPockitDatabase
 import dev.gitpockit.core.data.repository.CredentialRepository
 import dev.gitpockit.core.data.repository.RepoRepository
@@ -17,6 +18,11 @@ import dev.gitpockit.core.git.GitEngine
 import dev.gitpockit.core.git.jgit.JGitEngine
 import dev.gitpockit.core.security.KeystoreSecretCipher
 import dev.gitpockit.core.security.SecretCipher
+import dev.gitpockit.data.SettingsRepository
+import dev.gitpockit.sync.NetworkStatus
+import dev.gitpockit.sync.RepoOps
+import dev.gitpockit.sync.SyncEngine
+import kotlinx.coroutines.flow.first
 import javax.inject.Singleton
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -45,6 +51,25 @@ object AppModule {
     @Provides @Singleton
     fun provideCredentialRepository(db: GitPockitDatabase, cipher: SecretCipher): CredentialRepository =
         CredentialRepository(db.credentialDao(), cipher)
+
+    @Provides @Singleton
+    fun provideRepoOps(
+        engine: GitEngine,
+        repos: RepoRepository,
+        credentials: CredentialRepository,
+        settings: SettingsRepository,
+    ): RepoOps = RepoOps(engine, repos, credentials) { settings.author.first() }
+
+    @Provides @Singleton
+    fun provideNetworkStatus(@ApplicationContext context: Context): NetworkStatus = AndroidNetworkStatus(context)
+
+    @Provides @Singleton
+    fun provideSyncEngine(
+        ops: RepoOps,
+        repos: RepoRepository,
+        network: NetworkStatus,
+        settings: SettingsRepository,
+    ): SyncEngine = SyncEngine(ops, repos, network, deviceName = { settings.deviceName.first() })
 
     @Provides @Singleton
     fun provideStorageLocations(@ApplicationContext context: Context): StorageLocations = StorageLocations(context)

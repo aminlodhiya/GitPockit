@@ -68,7 +68,7 @@ import dev.gitpockit.core.designsystem.component.GradientButton
 import dev.gitpockit.core.designsystem.component.StatusPill
 import dev.gitpockit.core.designsystem.theme.CodeTextStyle
 import dev.gitpockit.core.designsystem.theme.GitPockitTheme
-import dev.gitpockit.domain.RepoOps
+import dev.gitpockit.sync.RepoOps
 import dev.gitpockit.ui.common.ConfirmDialog
 import dev.gitpockit.ui.common.InputDialog
 import kotlinx.coroutines.async
@@ -372,7 +372,16 @@ private fun RepoCard(
                 else if (status?.dirty == true) StatusPill(stringResource(R.string.tab_changes), ext.modified)
                 if ((status?.ahead ?: 0) > 0) StatusPill(stringResource(R.string.status_ahead, status!!.ahead), MaterialTheme.colorScheme.primary)
                 if ((status?.behind ?: 0) > 0) StatusPill(stringResource(R.string.status_behind, status!!.behind), MaterialTheme.colorScheme.secondary)
-                repo.lastError?.let { StatusPill("!", ext.removed) }
+                if (repo.pendingSync) StatusPill(stringResource(R.string.status_pending), ext.modified)
+                else if (repo.lastError != null && status?.conflicts != true) StatusPill(stringResource(R.string.widget_problem), ext.removed)
+            }
+            repo.lastSyncAt?.let {
+                Text(
+                    stringResource(R.string.last_synced, dev.gitpockit.ui.repo.relativeTime(java.time.Instant.ofEpochMilli(it))),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = ext.textSecondary,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {

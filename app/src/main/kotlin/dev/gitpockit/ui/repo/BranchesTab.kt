@@ -47,7 +47,7 @@ import dev.gitpockit.core.designsystem.theme.CodeTextStyle
 import dev.gitpockit.core.designsystem.theme.GitPockitTheme
 import dev.gitpockit.core.git.BranchInfo
 import dev.gitpockit.core.git.GitBranchNotMergedException
-import dev.gitpockit.domain.RepoOps
+import dev.gitpockit.sync.RepoOps
 import dev.gitpockit.ui.common.ConfirmDialog
 import dev.gitpockit.ui.common.InputDialog
 import kotlinx.coroutines.flow.MutableStateFlow

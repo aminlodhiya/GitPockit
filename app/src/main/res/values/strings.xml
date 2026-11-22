@@ -227,4 +227,126 @@
     <string name="settings_about">About</string>
     <string name="settings_license">Open source under GPL-3.0</string>
     <string name="settings_version">Version %1$s</string>
+
+    <!-- Background sync: notifications, tile, widget, accessibility -->
+    <string name="channel_problems">Sync problems</string>
+    <string name="channel_problems_desc">Conflicts and failed syncs that need your attention</string>
+    <string name="channel_done">Sync finished</string>
+    <string name="channel_running">Syncing</string>
+    <string name="channel_watch">Watching folders</string>
+    <string name="channel_watch_desc">Shown while GitPockit watches folders for changes. You can hide this channel.</string>
+    <string name="notif_conflicts_title">Conflicts in %1$s</string>
+    <string name="notif_conflicts_text">%1$d file(s) changed on both sides. Tap to resolve.</string>
+    <string name="notif_failed_title">Sync failed: %1$s</string>
+    <string name="notif_auth_title">Sign-in failed: %1$s</string>
+    <string name="notif_synced_title">%1$s synced</string>
+    <string name="notif_syncing">Syncing…</string>
+    <string name="notif_watching">Watching %1$d folder(s) for changes</string>
+    <string name="notif_watching_text">Changes are synced automatically.</string>
+    <string name="tile_label">Sync repos</string>
+    <string name="tile_subtitle">GitPockit</string>
+    <string name="widget_description">Your repositories and their sync status</string>
+    <string name="widget_sync_all">Sync all</string>
+    <string name="widget_problem">Needs attention</string>
+    <string name="widget_never">Not synced yet</string>
+    <string name="accessibility_label">GitPockit app triggers</string>
+    <string name="accessibility_description">Lets GitPockit sync a repository when an app you choose opens or closes (for example pull when Obsidian opens, push when it closes). GitPockit only sees which app is in front. It never reads what is on screen.</string>
+    <string name="status_pending">Waiting for network</string>
+    <string name="last_synced">Synced %1$s</string>
+
+    <!-- Repo sync settings -->
+    <string name="sync_section">Sync</string>
+    <string name="sync_mode">What sync does</string>
+    <string name="sync_mode_full">Commit, pull and push</string>
+    <string name="sync_mode_pull">Pull only (read-only copy)</string>
+    <string name="sync_schedule">Sync automatically</string>
+    <string name="sync_schedule_off">Off</string>
+    <string name="sync_every_minutes">Every %1$d minutes</string>
+    <string name="sync_every_hours">Every %1$d hour(s)</string>
+    <string name="sync_on_change">Sync when files change</string>
+    <string name="sync_on_change_desc">About 20 seconds after you stop editing</string>
+    <string name="sync_wifi_only">Only on Wi-Fi</string>
+    <string name="sync_wifi_only_desc">Automatic syncs wait for Wi-Fi. Tapping Sync always works.</string>
+    <string name="conflict_strategy">When the same file changed on both sides</string>
+    <string name="strategy_ask">Ask me</string>
+    <string name="strategy_local">Keep my version</string>
+    <string name="strategy_remote">Keep the remote version</string>
+    <string name="strategy_both">Keep both (save mine as a copy)</string>
+    <string name="commit_template">Auto-commit message</string>
+    <string name="commit_template_help">Placeholders: {device}, {date}, {time}, {count}, {files}</string>
+    <string name="app_triggers">Sync when an app opens or closes</string>
+    <string name="app_triggers_desc">E.g. pull when Obsidian opens, push when it closes. Needs the GitPockit accessibility service.</string>
+    <string name="app_trigger_add">Add app</string>
+    <string name="app_trigger_open">On open</string>
+    <string name="app_trigger_close">On close</string>
+    <string name="app_trigger_pick">Choose an app</string>
+    <string name="accessibility_off">The accessibility service is off, so app triggers won\'t run.</string>
+    <string name="accessibility_enable">Turn on</string>
+    <string name="sync_log">Sync log</string>
+    <string name="sync_log_empty">No syncs yet</string>
+    <string name="notifications_off">Notifications are off, so you won\'t hear about conflicts or failed syncs.</string>
+    <string name="notifications_enable">Allow</string>
+
+    <!-- Sync log -->
+    <string name="result_synced">Synced</string>
+    <string name="result_up_to_date">Up to date</string>
+    <string name="result_offline">Offline, queued</string>
+    <string name="result_conflicts">Conflicts</string>
+    <string name="result_failed">Failed</string>
+    <string name="trigger_manual">Manual</string>
+    <string name="trigger_schedule">Schedule</string>
+    <string name="trigger_file_change">File change</string>
+    <string name="trigger_app_open">App opened</string>
+    <string name="trigger_app_close">App closed</string>
+    <string name="trigger_tile">Quick tile</string>
+    <string name="trigger_widget">Widget</string>
+    <string name="trigger_intent">Automation</string>
+    <string name="trigger_retry">Network back</string>
+
+    <!-- Conflicts -->
+    <string name="conflicts_title">Resolve conflicts</string>
+    <string name="conflicts_explain">These files changed both here and on the remote. Pick which version to keep for each file, then finish the merge.</string>
+    <string name="conflicts_none">All conflicts resolved. Finish the merge to save it.</string>
+    <string name="conflict_local">Mine (this device)</string>
+    <string name="conflict_remote">Remote</string>
+    <string name="conflict_deleted">Deleted</string>
+    <string name="conflict_binary">Binary file</string>
+    <string name="keep_local">Keep mine</string>
+    <string name="keep_remote">Keep remote</string>
+    <string name="keep_both">Keep both</string>
+    <string name="edit_manually">Edit</string>
+    <string name="finish_merge">Finish merge &amp; sync</string>
+    <string name="abort_merge">Abort merge</string>
+    <string name="abort_merge_title">Abort the merge?</string>
+    <string name="abort_merge_message">Remote changes are dropped for now and your files go back to how they were before the pull. Your own changes are kept.</string>
+    <string name="merge_finished">Merge finished</string>
+    <string name="resolve_conflicts">Resolve conflicts</string>
+    <string name="edit_file_title">Edit %1$s</string>
+    <string name="edit_markers_help">Remove the conflict markers (&lt;&lt;&lt;&lt;&lt;&lt;&lt;, =======, &gt;&gt;&gt;&gt;&gt;&gt;&gt;) and keep the text you want.</string>
+    <string name="save_resolve">Save as resolved</string>
+
+    <!-- Global background settings -->
+    <string name="settings_background">Background sync</string>
+    <string name="settings_device_name">Device name</string>
+    <string name="settings_device_name_desc">Used in auto-commit messages and conflict copies</string>
+    <string name="settings_notify_success">Notify after successful syncs</string>
+    <string name="settings_notify_success_desc">Problems are always notified</string>
+    <string name="settings_accessibility">App open/close triggers</string>
+    <string name="settings_accessibility_on">Accessibility service is on</string>
+    <string name="settings_accessibility_off">Off: tap to turn on in Accessibility settings</string>
+    <string name="settings_battery">Unrestricted battery</string>
+    <string name="settings_battery_on">Background syncs won\'t be delayed by battery saving</string>
+    <string name="settings_battery_off">Tap so Android doesn\'t delay background syncs</string>
+    <string name="settings_automation">Allow automation apps</string>
+    <string name="settings_automation_desc">Tasker, Automate, etc. can send the broadcast %1$s to package %2$s. Extras: repo (name), direction (sync | pull | push).</string>
+    <string name="settings_tile_widget">Add the \"Sync repos\" Quick Settings tile from the tile editor, and the GitPockit widget from your home screen\'s widget list.</string>
+
+    <!-- Daily sync times -->
+    <string name="sync_at_times">Daily at specific times</string>
+    <string name="sync_times_label">Sync every day at</string>
+    <string name="sync_time_add">Add time</string>
+    <string name="sync_time_pick">Sync time</string>
+    <string name="sync_time_remove">Remove %1$s</string>
+    <string name="exact_alarm_off">Without \"Alarms &amp; reminders\" permission, syncs may run a few minutes late.</string>
+    <string name="exact_alarm_allow">Allow</string>
 </resources>

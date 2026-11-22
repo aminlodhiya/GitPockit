@@ -1,6 +1,7 @@
 package dev.gitpockit.ui.repo
 
 import android.content.Context
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sync
@@ -58,9 +60,11 @@ import dev.gitpockit.core.data.repository.RepoRepository
 import dev.gitpockit.core.designsystem.component.StatusPill
 import dev.gitpockit.core.designsystem.theme.CodeTextStyle
 import dev.gitpockit.core.designsystem.theme.GitPockitTheme
-import dev.gitpockit.core.git.PullResult
-import dev.gitpockit.domain.RepoOps
-import dev.gitpockit.ui.common.describe
+import dev.gitpockit.background.SyncCoordinator
+import dev.gitpockit.core.data.model.SyncResult
+import dev.gitpockit.core.data.model.SyncTrigger
+import dev.gitpockit.sync.RepoOps
+import dev.gitpockit.sync.SyncDirection
 import dev.gitpockit.ui.common.userMessage
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -68,6 +72,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -93,24 +98,27 @@ abstract class RepoScopedViewModel(savedState: SavedStateHandle, protected val o
 }
 
 data class RepoHeaderState(
-    val repo: Repo? = null,
     val branch: String? = null,
     val ahead: Int = 0,
     val behind: Int = 0,
     val conflicts: Int = 0,
-    val busy: Boolean = false,
+    val merging: Boolean = false,
 )
 
 @HiltViewModel
 class RepoViewModel @javax.inject.Inject constructor(
     savedState: SavedStateHandle,
     ops: RepoOps,
-    private val repos: RepoRepository,
+    repos: RepoRepository,
+    private val coordinator: SyncCoordinator,
     @ApplicationContext private val context: Context,
 ) : RepoScopedViewModel(savedState, ops) {
     private val _state = MutableStateFlow(RepoHeaderState())
     val state: StateFlow<RepoHeaderState> = _state
     val repo: StateFlow<Repo?> = repos.observe(repoId).stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** True while any sync (this screen's or a background one) works on the repo. */
+    val busy: StateFlow<Boolean> = ops.busy.map { repoId in it }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     init { refresh() }
 
@@ -119,51 +127,41 @@ class RepoViewModel @javax.inject.Inject constructor(
             runCatching {
                 ops.read(repoId) { _, git ->
                     val (ahead, behind) = git.aheadBehind() ?: (0 to 0)
-                    _state.update { it.copy(branch = git.currentBranch(), ahead = ahead, behind = behind, conflicts = git.status().conflicting.size) }
+                    val conflicts = git.status().conflicting.size
+                    val merging = git.isMerging()
+                    _state.update {
+                        it.copy(branch = git.currentBranch(), ahead = ahead, behind = behind, conflicts = conflicts, merging = merging)
+                    }
                 }
             }.onFailure { it.report() }
         }
     }
 
-    fun fetch() = network { repo, git ->
-        git.fetch(remote = repo.remoteName, credentials = ops.credentialsFor(repo))
-        context.getString(R.string.fetch_done)
-    }
-
-    fun pull() = network { repo, git -> context.describe(git.pull(remote = repo.remoteName, credentials = ops.credentialsFor(repo))) }
-
-    fun push() = network { repo, git -> context.describe(git.push(remote = repo.remoteName, credentials = ops.credentialsFor(repo))) }
-
-    /** Commit everything, pull, push. The Phase 2 sync engine runs this same flow in the background. */
-    fun sync() = network { repo, git ->
-        val creds = ops.credentialsFor(repo)
-        if (!git.status().isClean) {
-            git.stageAll()
-            git.commit(context.getString(R.string.default_sync_message), ops.authorFor(repo))
-        }
-        when (val pulled = git.pull(remote = repo.remoteName, credentials = creds)) {
-            is PullResult.Conflicts -> context.describe(pulled)
-            else -> {
-                val pushed = git.push(remote = repo.remoteName, credentials = creds)
-                if (pushed.isSuccess) context.getString(R.string.sync_done) else context.describe(pushed)
-            }
-        }
-    }
-
-    private fun network(block: suspend (Repo, dev.gitpockit.core.git.GitRepository) -> String) {
-        if (_state.value.busy) return
-        _state.update { it.copy(busy = true) }
+    fun fetch() {
         viewModelScope.launch {
-            runCatching { ops.write(repoId, block) }
-                .onSuccess { msg ->
-                    repos.recordSync(repoId, null)
-                    message(msg)
-                }
-                .onFailure { e ->
-                    repos.recordSync(repoId, e.userMessage())
-                    e.report()
-                }
-            _state.update { it.copy(busy = false) }
+            runCatching { ops.write(repoId) { repo, git -> git.fetch(remote = repo.remoteName, credentials = ops.credentialsFor(repo)) } }
+                .onSuccess { message(context.getString(R.string.fetch_done)) }
+                .onFailure { it.report() }
+        }
+    }
+
+    fun sync() = run(SyncDirection.BOTH)
+    fun pull() = run(SyncDirection.PULL)
+    fun push() = run(SyncDirection.PUSH)
+
+    private fun run(direction: SyncDirection) {
+        if (busy.value) return
+        viewModelScope.launch {
+            val outcome = coordinator.run(repoId, SyncTrigger.MANUAL, direction)
+            message(
+                when (outcome.result) {
+                    SyncResult.SYNCED -> outcome.message ?: context.getString(R.string.sync_done)
+                    SyncResult.UP_TO_DATE -> context.getString(R.string.sync_up_to_date)
+                    SyncResult.OFFLINE -> context.getString(R.string.status_pending)
+                    SyncResult.CONFLICTS -> context.getString(R.string.sync_conflicts, outcome.conflicts.size.coerceAtLeast(1))
+                    SyncResult.FAILED -> outcome.message ?: context.getString(R.string.result_failed)
+                },
+            )
         }
     }
 }
@@ -175,9 +173,12 @@ fun RepoScreen(
     onOpenSettings: () -> Unit,
     onOpenCommit: (String) -> Unit,
     onOpenDiff: (path: String, staged: Boolean) -> Unit,
+    onOpenConflicts: () -> Unit,
+    onOpenLog: () -> Unit,
     viewModel: RepoViewModel = hiltViewModel(),
 ) {
     val s by viewModel.state.collectAsStateWithLifecycle()
+    val busy by viewModel.busy.collectAsStateWithLifecycle()
     val repo by viewModel.repo.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -209,26 +210,31 @@ fun RepoScreen(
                     },
                     navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back)) } },
                     actions = {
-                        IconButton(onClick = viewModel::sync, enabled = !s.busy) { Icon(Icons.Default.Sync, stringResource(R.string.action_sync)) }
+                        IconButton(onClick = viewModel::sync, enabled = !busy) { Icon(Icons.Default.Sync, stringResource(R.string.action_sync)) }
                         IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.action_more)) }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.action_pull)) },
                                 leadingIcon = { Icon(Icons.Default.CloudDownload, null) },
-                                enabled = !s.busy,
+                                enabled = !busy,
                                 onClick = { menu = false; viewModel.pull() },
                             )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.action_push)) },
                                 leadingIcon = { Icon(Icons.Default.CloudUpload, null) },
-                                enabled = !s.busy,
+                                enabled = !busy,
                                 onClick = { menu = false; viewModel.push() },
                             )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.action_fetch)) },
                                 leadingIcon = { Icon(Icons.Default.CloudSync, null) },
-                                enabled = !s.busy,
+                                enabled = !busy,
                                 onClick = { menu = false; viewModel.fetch() },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.sync_log)) },
+                                leadingIcon = { Icon(Icons.Default.History, null) },
+                                onClick = { menu = false; onOpenLog() },
                             )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.repo_settings)) },
@@ -239,13 +245,15 @@ fun RepoScreen(
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
                 )
-                if (s.busy) LinearProgressIndicator(Modifier.fillMaxWidth()) else androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 4.dp))
-                if (s.conflicts > 0) {
+                if (busy) LinearProgressIndicator(Modifier.fillMaxWidth()) else androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 4.dp))
+                if (s.conflicts > 0 || s.merging) {
                     StatusPill(
-                        stringResource(R.string.sync_conflicts, s.conflicts),
+                        stringResource(R.string.resolve_conflicts),
                         ext.removed,
-                        Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        Modifier.padding(horizontal = 16.dp, vertical = 4.dp).clickable(onClick = onOpenConflicts),
                     )
+                } else if (repo?.pendingSync == true) {
+                    StatusPill(stringResource(R.string.status_pending), ext.modified, Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
                 }
                 PrimaryTabRow(selectedTabIndex = pager.currentPage, containerColor = MaterialTheme.colorScheme.background) {
                     tabs.forEachIndexed { i, label ->
@@ -261,7 +269,7 @@ fun RepoScreen(
     ) { padding ->
         HorizontalPager(state = pager, modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()), beyondViewportPageCount = 1) { page ->
             when (page) {
-                0 -> ChangesTab(onOpenDiff = onOpenDiff, showMessage = showMessage)
+                0 -> ChangesTab(onOpenDiff = onOpenDiff, onOpenConflicts = onOpenConflicts, showMessage = showMessage)
                 1 -> HistoryTab(onOpenCommit = onOpenCommit, showMessage = showMessage)
                 2 -> BranchesTab(showMessage = showMessage)
                 else -> RemotesTab(showMessage = showMessage)

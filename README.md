@@ -4,7 +4,7 @@
 
 GitPockit is a free, open-source Git client for Android. Keep any folder on your phone — notes, an Obsidian vault, dotfiles, docs, code — in sync with a Git repository, and use the full power of Git from your phone.
 
-> Status: **early development (v0.2, Phase 1)**. Core Git features work; automatic background sync comes next. Expect breaking changes.
+> Status: **early development (v0.3, Phase 2)**. Core Git features and automatic background sync work. Expect breaking changes.
 
 ## Features
 
@@ -18,12 +18,13 @@ GitPockit is a free, open-source Git client for Android. Keep any folder on your
 - Remotes: add, edit URL, rename, delete, fetch, choose which one to sync with
 - Pull, push, fetch and one-tap **Sync** (commit → pull → push), ahead/behind and conflict indicators
 - Per-repo commit author and credential
+- **Automatic sync**: every N minutes/hours or daily at exact times (e.g. 09:00 and 21:30), when files change, when a chosen app opens or closes (e.g. Obsidian), from a Quick Settings tile, a home-screen widget, or automation apps (Tasker/Automate broadcast `dev.gitpockit.action.SYNC`)
+- **Offline-first**: changes are always committed locally; pushes wait for the network (or Wi-Fi) and run automatically when it's back, even after a reboot
+- **Conflict handling** per repo: ask me (with an in-app resolver: keep mine / keep remote / keep both / edit), or resolve automatically
+- Sync log per repository, notifications for conflicts and failures, customizable auto-commit message (`{device}`, `{date}`, `{time}`, `{count}`, `{files}`)
 - Premium dark theme (default), simple light theme, AMOLED black, optional Material You colors
 
 **On the roadmap**
-- Automatic sync: on a schedule, when files change, when a chosen app opens or closes, from a Quick Settings tile, home-screen widget, or automation apps (Tasker, Automate) via intents
-- Offline-first: commits always happen locally, pushes queue up and run when you're back online
-- Conflict resolver, per-repo conflict strategies, sync log
 - Branches, tags, remotes, stash, rebase, cherry-pick, revert, reset, blame, reflog, submodules, Git LFS
 - Hunk- and line-level staging, commit graph, diffs, file explorer and code editor
 - GitHub / GitLab / Gitea sign-in, issues, pull requests and CI runs
@@ -36,7 +37,8 @@ Requirements: JDK 17+, Android SDK (platform 36, build-tools 36).
 
 ```bash
 ./gradlew :core:git:test        # Git engine tests (pure JVM, no device needed)
-./gradlew :core:data:testDebugUnitTest  # database & credential tests (Robolectric)
+./gradlew :core:data:testDebugUnitTest  # database, migration & credential tests (Robolectric)
+./gradlew :sync:testDebugUnitTest       # sync engine tests against real Git repos
 ./gradlew :app:assembleDebug    # app/build/outputs/apk/debug/
 ```
 
@@ -49,6 +51,7 @@ Requirements: JDK 17+, Android SDK (platform 36, build-tools 36).
 | `core/git` | `GitEngine` API and its JGit implementation (pure Kotlin/JVM) |
 | `core/data` | Room database (repos, containers, credentials), repositories, storage helpers |
 | `core/security` | Android Keystore AES-GCM encryption for secrets |
+| `sync` | Sync engine (commit → pull → resolve → push), per-repo operation lock |
 
 The app talks only to the `GitEngine` interface, so the Git backend can be swapped without touching features.
 

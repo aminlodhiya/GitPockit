@@ -29,6 +29,21 @@ class SettingsRepository @Inject constructor(
         GitAuthor(name = p[AUTHOR_NAME] ?: "GitPockit", email = p[AUTHOR_EMAIL] ?: "gitpockit@localhost")
     }
 
+    /** Shown in auto-commit messages and conflict copies, e.g. "Sync from Pixel 8". */
+    val deviceName: Flow<String> = store.data.map { p -> p[DEVICE_NAME]?.takeIf { it.isNotBlank() } ?: defaultDeviceName() }
+
+    /** Post a (quiet) notification after successful background syncs. Problems are always notified. */
+    val notifyOnSuccess: Flow<Boolean> = store.data.map { it[NOTIFY_SUCCESS] ?: false }
+
+    /** Let automation apps (Tasker, Automate…) trigger syncs via broadcast intents. */
+    val automationEnabled: Flow<Boolean> = store.data.map { it[AUTOMATION] ?: false }
+
+    suspend fun setDeviceName(name: String) = store.edit { it[DEVICE_NAME] = name.trim() }
+
+    suspend fun setNotifyOnSuccess(enabled: Boolean) = store.edit { it[NOTIFY_SUCCESS] = enabled }
+
+    suspend fun setAutomationEnabled(enabled: Boolean) = store.edit { it[AUTOMATION] = enabled }
+
     suspend fun setThemeMode(mode: ThemeMode) = store.edit { it[THEME_MODE] = mode.name }
 
     suspend fun setAmoled(enabled: Boolean) = store.edit { it[AMOLED] = enabled }
@@ -46,5 +61,11 @@ class SettingsRepository @Inject constructor(
         val DYNAMIC = booleanPreferencesKey("dynamic_color")
         val AUTHOR_NAME = stringPreferencesKey("author_name")
         val AUTHOR_EMAIL = stringPreferencesKey("author_email")
+        val DEVICE_NAME = stringPreferencesKey("device_name")
+        val NOTIFY_SUCCESS = booleanPreferencesKey("notify_success")
+        val AUTOMATION = booleanPreferencesKey("automation_enabled")
+
+        fun defaultDeviceName(): String =
+            android.os.Build.MODEL.takeIf { it.isNotBlank() } ?: "Android"
     }
 }

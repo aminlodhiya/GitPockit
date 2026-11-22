@@ -33,7 +33,7 @@ import dev.gitpockit.core.designsystem.component.EmptyState
 import dev.gitpockit.core.designsystem.theme.CodeTextStyle
 import dev.gitpockit.core.designsystem.theme.GitPockitTheme
 import dev.gitpockit.core.git.CommitInfo
-import dev.gitpockit.domain.RepoOps
+import dev.gitpockit.sync.RepoOps
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

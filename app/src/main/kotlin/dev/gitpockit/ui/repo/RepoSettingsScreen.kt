@@ -43,7 +43,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.gitpockit.R
+import dev.gitpockit.core.data.model.AppTrigger
 import dev.gitpockit.core.data.model.Container
+import dev.gitpockit.core.data.model.SyncSettings
 import dev.gitpockit.core.data.model.Credential
 import dev.gitpockit.core.data.model.Repo
 import dev.gitpockit.core.data.repository.CredentialRepository
@@ -82,6 +84,11 @@ class RepoSettingsViewModel @Inject constructor(
     fun setCredential(id: Long?) = viewModelScope.launch { repos.setCredential(repoId, id) }
     fun setContainer(id: Long?) = viewModelScope.launch { repos.moveToContainer(repoId, id) }
     fun setAuthor(author: GitAuthor?) = viewModelScope.launch { repos.setAuthor(repoId, author) }
+    val appTriggers: StateFlow<List<AppTrigger>> = repos.observeAppTriggers(repoId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    fun setSync(settings: SyncSettings) = viewModelScope.launch { repos.updateSyncSettings(repoId, settings) }
+    fun setAppTrigger(trigger: AppTrigger) = viewModelScope.launch { repos.setAppTrigger(trigger) }
+    fun removeAppTrigger(pkg: String) = viewModelScope.launch { repos.removeAppTrigger(pkg, repoId) }
+
     fun remove(deleteFiles: Boolean) = viewModelScope.launch {
         repos.remove(repoId, deleteFiles)
         _removed.value = true
@@ -94,9 +101,11 @@ fun RepoSettingsScreen(
     onBack: () -> Unit,
     onRemoved: () -> Unit,
     onAddCredential: () -> Unit,
+    onOpenLog: () -> Unit,
     newCredentialId: Long?,
     viewModel: RepoSettingsViewModel = hiltViewModel(),
 ) {
+    val triggers by viewModel.appTriggers.collectAsStateWithLifecycle()
     val repo by viewModel.repo.collectAsStateWithLifecycle()
     val credentials by viewModel.credentials.collectAsStateWithLifecycle()
     val containers by viewModel.containers.collectAsStateWithLifecycle()
@@ -137,6 +146,9 @@ fun RepoSettingsScreen(
                 Text(stringResource(R.string.repo_location), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
                 Text(r.directory.path, style = CodeTextStyle, color = ext.textSecondary)
             }
+
+            SyncSettingsCard(r.sync, viewModel::setSync, onOpenLog)
+            AppTriggersCard(triggers, r.id, viewModel::setAppTrigger, viewModel::removeAppTrigger)
 
             GpCard(Modifier.fillMaxWidth()) {
                 CredentialPicker(credentials, r.credentialId, viewModel::setCredential, onAddCredential, Modifier.fillMaxWidth())

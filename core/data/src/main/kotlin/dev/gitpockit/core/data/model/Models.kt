@@ -27,4 +27,7 @@ data class Repo(
     val authorEmail: String?,
     val lastSyncAt: Long?,
     val lastError: String?,
+    val sync: SyncSettings = SyncSettings(),
+    /** Local commits are waiting for the network to be pushed. */
+    val pendingSync: Boolean = false,
 )

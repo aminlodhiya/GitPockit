@@ -149,3 +149,13 @@ class GitLocalChangesException(val paths: List<String>, cause: Throwable? = null
             "would be overwritten. Commit or discard them first.",
         cause,
     )
+
+/** The three versions of a conflicted file. Null means the file doesn't exist on that side. */
+class ConflictVersions(
+    val path: String,
+    val base: ByteArray?,
+    /** Version from the local branch (before the pull). */
+    val ours: ByteArray?,
+    /** Version from the remote branch being merged in. */
+    val theirs: ByteArray?,
+)

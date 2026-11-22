@@ -42,7 +42,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.Accessibility
+import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import dev.gitpockit.BuildConfig
+import dev.gitpockit.background.SyncIntentReceiver
+import dev.gitpockit.background.SystemSettings
 import dev.gitpockit.R
 import dev.gitpockit.ui.common.rememberStorageAccess
 import dev.gitpockit.core.designsystem.component.GpCard
@@ -66,6 +77,13 @@ class SettingsViewModel @Inject constructor(private val repo: SettingsRepository
     fun setAmoled(v: Boolean) = viewModelScope.launch { repo.setAmoled(v) }
     fun setDynamic(v: Boolean) = viewModelScope.launch { repo.setDynamicColor(v) }
     fun setAuthor(a: GitAuthor) = viewModelScope.launch { repo.setAuthor(a) }
+
+    val deviceName: StateFlow<String?> = repo.deviceName.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val notifyOnSuccess: StateFlow<Boolean> = repo.notifyOnSuccess.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val automation: StateFlow<Boolean> = repo.automationEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    fun setDeviceName(v: String) = viewModelScope.launch { repo.setDeviceName(v) }
+    fun setNotifyOnSuccess(v: Boolean) = viewModelScope.launch { repo.setNotifyOnSuccess(v) }
+    fun setAutomation(v: Boolean) = viewModelScope.launch { repo.setAutomationEnabled(v) }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,6 +133,8 @@ fun SettingsScreen(onBack: () -> Unit, onCredentials: () -> Unit, viewModel: Set
 
             author?.let { a -> AuthorCard(a, viewModel::setAuthor) }
 
+            BackgroundSyncCard(viewModel)
+
             val storage = rememberStorageAccess()
             GpCard(Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.settings_security), style = MaterialTheme.typography.titleMedium)
@@ -137,6 +157,74 @@ fun SettingsScreen(onBack: () -> Unit, onCredentials: () -> Unit, viewModel: Set
                     color = ext.textSecondary,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun BackgroundSyncCard(viewModel: SettingsViewModel) {
+    val context = LocalContext.current
+    val ext = GitPockitTheme.extendedColors
+    val deviceName by viewModel.deviceName.collectAsStateWithLifecycle()
+    val notifySuccess by viewModel.notifyOnSuccess.collectAsStateWithLifecycle()
+    val automation by viewModel.automation.collectAsStateWithLifecycle()
+    var accessibilityOn by remember { mutableStateOf(SystemSettings.isAppTriggerServiceEnabled(context)) }
+    var batteryOk by remember { mutableStateOf(SystemSettings.isIgnoringBatteryOptimizations(context)) }
+    var notificationsOk by remember { mutableStateOf(SystemSettings.canPostNotifications(context)) }
+    LifecycleResumeEffect(Unit) {
+        accessibilityOn = SystemSettings.isAppTriggerServiceEnabled(context)
+        batteryOk = SystemSettings.isIgnoringBatteryOptimizations(context)
+        notificationsOk = SystemSettings.canPostNotifications(context)
+        onPauseOrDispose { }
+    }
+    val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notificationsOk = it }
+
+    GpCard(Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.settings_background), style = MaterialTheme.typography.titleMedium)
+        deviceName?.let { initial ->
+            var name by remember { mutableStateOf(initial) }
+            LaunchedEffect(name) {
+                kotlinx.coroutines.delay(500)
+                if (name != initial) viewModel.setDeviceName(name)
+            }
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text(stringResource(R.string.settings_device_name)) },
+                supportingText = { Text(stringResource(R.string.settings_device_name_desc)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            )
+        }
+        if (!notificationsOk && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.notifications_off), style = MaterialTheme.typography.bodySmall, color = ext.removed, modifier = Modifier.weight(1f))
+                TextButton(onClick = { notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }) { Text(stringResource(R.string.notifications_enable)) }
+            }
+        }
+        ToggleRow(R.string.settings_notify_success, R.string.settings_notify_success_desc, notifySuccess, viewModel::setNotifyOnSuccess)
+        LinkRow(
+            Icons.Default.Accessibility,
+            R.string.settings_accessibility,
+            stringResource(if (accessibilityOn) R.string.settings_accessibility_on else R.string.settings_accessibility_off),
+            onClick = { SystemSettings.openAccessibilitySettings(context) },
+        )
+        LinkRow(
+            Icons.Default.BatteryChargingFull,
+            R.string.settings_battery,
+            stringResource(if (batteryOk) R.string.settings_battery_on else R.string.settings_battery_off),
+            onClick = { if (!batteryOk) SystemSettings.requestIgnoreBatteryOptimizations(context) },
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.settings_automation), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    stringResource(R.string.settings_automation_desc, SyncIntentReceiver.ACTION_SYNC, context.packageName),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = ext.textSecondary,
+                )
+            }
+            Switch(checked = automation, onCheckedChange = viewModel::setAutomation)
         }
     }
 }

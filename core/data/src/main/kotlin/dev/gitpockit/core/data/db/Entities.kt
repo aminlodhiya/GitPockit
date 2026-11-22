@@ -60,4 +60,47 @@ data class RepoEntity(
     val createdAt: Long,
     val lastSyncAt: Long? = null,
     val lastError: String? = null,
+    // --- Sync settings (v2) ---
+    /** FULL = commit, pull and push; PULL_ONLY = never commit or push. */
+    @ColumnInfo(defaultValue = "FULL") val syncMode: String = "FULL",
+    /** ASK, KEEP_LOCAL, KEEP_REMOTE or KEEP_BOTH. */
+    @ColumnInfo(defaultValue = "ASK") val conflictStrategy: String = "ASK",
+    /** Auto-commit message template; null = default. */
+    val commitTemplate: String? = null,
+    /** Background sync interval in minutes; 0 = off. */
+    @ColumnInfo(defaultValue = "0") val syncIntervalMinutes: Int = 0,
+    @ColumnInfo(defaultValue = "0") val syncOnChange: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val wifiOnly: Boolean = false,
+    /** Local work is waiting to be pushed (e.g. the last sync was offline). */
+    @ColumnInfo(defaultValue = "0") val pendingSync: Boolean = false,
+    /** Daily sync times as minutes after midnight, comma separated, e.g. "540,1290" (v3). */
+    @ColumnInfo(defaultValue = "") val syncTimes: String = "",
+)
+
+@Entity(
+    tableName = "sync_log",
+    indices = [Index("repoId")],
+    foreignKeys = [ForeignKey(entity = RepoEntity::class, parentColumns = ["id"], childColumns = ["repoId"], onDelete = ForeignKey.CASCADE)],
+)
+data class SyncLogEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val repoId: Long,
+    val trigger: String,
+    val startedAt: Long,
+    val durationMs: Long,
+    val result: String,
+    val message: String? = null,
+)
+
+@Entity(
+    tableName = "app_triggers",
+    primaryKeys = ["packageName", "repoId"],
+    indices = [Index("repoId")],
+    foreignKeys = [ForeignKey(entity = RepoEntity::class, parentColumns = ["id"], childColumns = ["repoId"], onDelete = ForeignKey.CASCADE)],
+)
+data class AppTriggerEntity(
+    val packageName: String,
+    val repoId: Long,
+    val onOpen: Boolean,
+    val onClose: Boolean,
 )
