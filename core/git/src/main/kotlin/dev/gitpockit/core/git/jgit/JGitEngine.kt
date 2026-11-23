@@ -43,6 +43,7 @@ class JGitEngine(
 ) : GitEngine {
 
     init {
+        HostConfigIsolation.ensure() // before anything reads Git config
         JschSetup.ensure()
         PockitLfs.ensure()
         appDataDir.mkdirs()

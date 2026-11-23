@@ -111,6 +111,16 @@ class LfsTest {
         engine.clone(CloneOptions(remote.toURI().toString(), File(tmp.root, name), credentials = credentials, downloadLfs = download))
             .also { it.setIdentity(me) }
 
+    @Test fun `fresh clones use GitPockit's LFS filters regardless of the host git config`() = runTest {
+        // CI machines configure the external git-lfs program system-wide; JGit must not use it.
+        val raw = Git.cloneRepository().setURI(remote.toURI().toString()).setDirectory(File(tmp.root, "raw")).setNoCheckout(true).call()
+        raw.use { git ->
+            assertTrue(git.repository.config.getBoolean("filter", "lfs", "useJGitBuiltin", false))
+            assertEquals(null, git.repository.config.getString("filter", "lfs", "smudge"))
+            assertEquals(null, git.repository.config.getString("filter", "lfs", "process"))
+        }
+    }
+
     @Test fun `push uploads large files and commits only a pointer`() = runTest {
         assertEquals(1, server.objects.size)
         assertArrayEquals(big, server.objects.values.single())
