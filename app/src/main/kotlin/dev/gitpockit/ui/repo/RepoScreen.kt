@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.MoreVert
@@ -197,6 +199,8 @@ fun RepoScreen(
     onOpenEditor: (String) -> Unit,
     onOpenImage: (String) -> Unit,
     onFileHistory: (String) -> Unit,
+    onOpenSubmodules: () -> Unit,
+    onOpenLfs: () -> Unit,
     viewModel: RepoViewModel = hiltViewModel(),
 ) {
     val s by viewModel.state.collectAsStateWithLifecycle()
@@ -262,6 +266,16 @@ fun RepoScreen(
                                 text = { Text(stringResource(R.string.menu_tags)) },
                                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, null) },
                                 onClick = { menu = false; onOpenTags() },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.menu_submodules)) },
+                                leadingIcon = { Icon(Icons.Default.AccountTree, null) },
+                                onClick = { menu = false; onOpenSubmodules() },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.menu_lfs)) },
+                                leadingIcon = { Icon(Icons.Default.Storage, null) },
+                                onClick = { menu = false; onOpenLfs() },
                             )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.menu_gitignore)) },

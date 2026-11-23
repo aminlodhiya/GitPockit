@@ -6,7 +6,13 @@ import dev.gitpockit.core.git.BlameLine
 import dev.gitpockit.core.git.CommitDetail
 import dev.gitpockit.core.git.Comparison
 import dev.gitpockit.core.git.FileHistoryEntry
+import dev.gitpockit.core.git.LfsFile
 import dev.gitpockit.core.git.LineSelection
+import dev.gitpockit.core.git.jgit.lfs.LfsTransfer
+import dev.gitpockit.core.git.jgit.lfs.PockitLfs
+import org.eclipse.jgit.lfs.Lfs
+import org.eclipse.jgit.lfs.LfsPointer
+import java.nio.file.Files
 import dev.gitpockit.core.git.RefKind
 import dev.gitpockit.core.git.RefLabel
 import dev.gitpockit.core.git.ConflictVersions
@@ -14,8 +20,13 @@ import dev.gitpockit.core.git.GitLocalChangesException
 import dev.gitpockit.core.git.GitOperation
 import dev.gitpockit.core.git.OperationResult
 import dev.gitpockit.core.git.ReflogEntryInfo
+import dev.gitpockit.core.git.SignatureInfo
+import dev.gitpockit.core.git.SigningKey
+import dev.gitpockit.core.git.TrustedKeys
 import dev.gitpockit.core.git.ResetMode
 import dev.gitpockit.core.git.StashInfo
+import dev.gitpockit.core.git.SubmoduleInfo
+import dev.gitpockit.core.git.SubmoduleState
 import dev.gitpockit.core.git.TagInfo
 import dev.gitpockit.core.git.FileChange
 import dev.gitpockit.core.git.FileDiff
@@ -58,6 +69,8 @@ import org.eclipse.jgit.lib.RefUpdate
 import org.eclipse.jgit.lib.RepositoryState
 import org.eclipse.jgit.revwalk.RevWalk
 import org.eclipse.jgit.revwalk.RevTag
+import org.eclipse.jgit.submodule.SubmoduleStatusType
+import org.eclipse.jgit.submodule.SubmoduleWalk
 import org.eclipse.jgit.transport.RefSpec
 import org.eclipse.jgit.transport.RemoteConfig
 import org.eclipse.jgit.treewalk.TreeWalk
@@ -79,6 +92,11 @@ internal class JGitRepository(
 ) : GitRepository {
 
     private val repo get() = git.repository
+    private var lfsAutoDownload = true
+
+    init {
+        PockitLfs.configure(git.repository)
+    }
 
     override val workTree: File get() = repo.workTree
 
@@ -133,7 +151,7 @@ internal class JGitRepository(
             .setAuthor(ident)
             .setCommitter(ident)
             .setAmend(amend)
-            .setSign(false)
+            
             .call()
             .toInfo()
     }
@@ -375,8 +393,27 @@ internal class JGitRepository(
         rebase: Boolean,
         progress: GitProgress?,
     ): PullResult {
+        val result = pullInternal(remote, credentials, rebase, progress)
+        if (result !is PullResult.Conflicts && result != PullResult.UpToDate && lfsAutoDownload && usesLfs()) {
+            // Best effort: missing large files stay as pointers and can be downloaded later.
+            runCatching { lfsDownload(remote, credentials) }
+        }
+        return result
+    }
+
+    private suspend fun pullInternal(
+        remote: String,
+        credentials: GitCredentials,
+        rebase: Boolean,
+        progress: GitProgress?,
+    ): PullResult {
         val job = coroutineContext[Job]
         return engine.io {
+            if (repo.fullBranch?.startsWith(Constants.R_HEADS) != true && repo.resolve(Constants.HEAD) != null) {
+                throw GitException(
+                    "Not on a branch (detached HEAD, common in submodules). Check out a branch (for example main) first, then pull.",
+                )
+            }
             val cmd = git.pull()
                 .setRemote(remote)
                 .setRebase(rebase)
@@ -422,6 +459,8 @@ internal class JGitRepository(
         progress: GitProgress?,
     ): PushResult {
         val job = coroutineContext[Job]
+        // Large files must be on the LFS server before commits that point to them are pushed.
+        if (usesLfs()) engine.io { uploadOutgoingLfs(remote, credentials) }
         return engine.io {
             val cmd = git.push()
                 .setRemote(remote)
@@ -576,6 +615,15 @@ internal class JGitRepository(
         repo.config.setString("user", null, "email", author.email)
     }
 
+    override fun setSigning(key: SigningKey?) = CommitSigning.configure(repo, key)
+
+    override suspend fun signature(commitId: String, trusted: TrustedKeys): SignatureInfo = engine.io {
+        val raw = repo.newObjectReader().use { it.open(resolveCommit(commitId)).bytes }
+        CommitSigning.verify(raw, trusted)
+    }
+
+    private val signingEnabled: Boolean get() = repo.config.getBoolean("commit", null, "gpgSign", false)
+
     override suspend fun isMerging(): Boolean = engine.io { repo.repositoryState == RepositoryState.MERGING }
 
     override suspend fun operation(): GitOperation = engine.io { currentOperation() }
@@ -604,7 +652,7 @@ internal class JGitRepository(
                 val ident = PersonIdent(author.name, author.email)
                 // Default to the message Git prepared (e.g. "Merge branch 'x'" or the picked commit's message).
                 val text = message.ifBlank { repo.readMergeCommitMsg()?.trim().orEmpty() }.ifBlank { "Merge" }
-                git.commit().setMessage(text).setAuthor(ident).setCommitter(ident).setSign(false).call()
+                git.commit().setMessage(text).setAuthor(ident).setCommitter(ident).call()
                 OperationResult.Done
             }
         }
@@ -736,11 +784,11 @@ internal class JGitRepository(
     override suspend fun createTag(name: String, message: String?, rev: String?, author: GitAuthor) = engine.io {
         RevWalk(repo).use { walk ->
             val target = walk.parseAny(rev?.let(::resolveCommit) ?: resolveCommit(Constants.HEAD))
-            val cmd = git.tag().setName(name).setObjectId(target).setSigned(false)
+            val cmd = git.tag().setName(name).setObjectId(target)
             if (message.isNullOrBlank()) {
-                cmd.setAnnotated(false)
+                cmd.setAnnotated(false).setSigned(false) // lightweight tags can't carry a signature
             } else {
-                cmd.setAnnotated(true).setMessage(message).setTagger(PersonIdent(author.name, author.email))
+                cmd.setAnnotated(true).setMessage(message).setTagger(PersonIdent(author.name, author.email)).setSigned(signingEnabled)
             }
             cmd.call()
         }
@@ -761,6 +809,135 @@ internal class JGitRepository(
                 .filter { it.status != RemoteRefUpdate.Status.OK && it.status != RemoteRefUpdate.Status.UP_TO_DATE }
                 .associate { it.remoteName to (it.message ?: it.status.name) },
         )
+    }
+
+    override suspend fun submodules(): List<SubmoduleInfo> = engine.io {
+        val urls = runCatching {
+            SubmoduleWalk.forIndex(repo).use { walk ->
+                buildMap { while (walk.next()) put(walk.path, walk.modulesUrl ?: walk.configUrl) }
+            }
+        }.getOrDefault(emptyMap())
+        git.submoduleStatus().call().values.map { st ->
+            SubmoduleInfo(
+                path = st.path,
+                url = urls[st.path],
+                state = when (st.type) {
+                    SubmoduleStatusType.UNINITIALIZED -> SubmoduleState.UNINITIALIZED
+                    SubmoduleStatusType.MISSING -> SubmoduleState.MISSING
+                    SubmoduleStatusType.REV_CHECKED_OUT -> SubmoduleState.DIFFERENT_COMMIT
+                    else -> if (st.headId != null && st.headId != st.indexId) SubmoduleState.DIFFERENT_COMMIT else SubmoduleState.UP_TO_DATE
+                },
+                expectedId = st.indexId?.name,
+                checkedOutId = st.headId?.name,
+            )
+        }.sortedBy { it.path }
+    }
+
+    override suspend fun updateSubmodules(paths: Collection<String>, credentials: GitCredentials): List<String> = engine.io {
+        val init = git.submoduleInit()
+        paths.forEach(init::addPath)
+        init.call()
+        val update = git.submoduleUpdate().setFetch(true)
+        paths.forEach(update::addPath)
+        engine.applyCredentials(update, credentials)
+        update.call().toList()
+    }
+
+    override suspend fun addSubmodule(path: String, url: String, credentials: GitCredentials) = engine.io {
+        val cmd = git.submoduleAdd().setPath(path.trim('/')).setURI(url)
+        engine.applyCredentials(cmd, credentials)
+        cmd.call().close()
+        Unit
+    }
+
+    override suspend fun syncSubmodules() = engine.io {
+        git.submoduleSync().call()
+        Unit
+    }
+
+    override fun setLfsAutoDownload(enabled: Boolean) {
+        lfsAutoDownload = enabled
+    }
+
+    override suspend fun usesLfs(): Boolean = engine.io {
+        File(repo.workTree, ".gitattributes").takeIf { it.isFile }?.readText()?.contains("filter=lfs") == true
+    }
+
+    /** (path, pointer) for every LFS pointer in the index. */
+    private fun indexPointers(paths: Collection<String> = emptyList()): List<Pair<String, LfsPointer>> {
+        val index = repo.readDirCache()
+        return (0 until index.entryCount).mapNotNull { i ->
+            val e = index.getEntry(i)
+            if (e.stage != 0 || (paths.isNotEmpty() && e.pathString !in paths)) return@mapNotNull null
+            val loader = repo.open(e.objectId)
+            if (loader.size >= PockitLfs.POINTER_MAX) return@mapNotNull null
+            PockitLfs.parsePointer(loader.bytes)?.let { e.pathString to it }
+        }
+    }
+
+    private fun hasMedia(p: LfsPointer): Boolean = Lfs(repo).getMediaFile(p.oid).let { Files.isRegularFile(it) && Files.size(it) == p.size }
+
+    override suspend fun lfsFiles(): List<LfsFile> = engine.io {
+        indexPointers().map { (path, p) -> LfsFile(path, p.oid.name(), p.size, hasMedia(p)) }
+    }
+
+    override suspend fun lfsDownload(remote: String, credentials: GitCredentials, paths: Collection<String>): Int = engine.io {
+        val pointers = indexPointers(paths)
+        val missing = pointers.map { it.second }.filterNot(::hasMedia).distinctBy { it.oid.name() }
+        if (missing.isNotEmpty()) {
+            val endpoint = LfsTransfer.endpoint(repo, remote, "download", credentials, engine.sshFactory(credentials))
+            val items = LfsTransfer.batch(endpoint, "download", missing)
+            items.firstOrNull { it.error != null }?.let { throw GitException("LFS: ${it.error}") }
+            items.forEach { LfsTransfer.download(repo, it) }
+        }
+        // Replace pointer files in the working tree with the real content (skip files the user edited).
+        val toCheckout = pointers.filter { (path, p) ->
+            hasMedia(p) && File(repo.workTree, path).let { f ->
+                f.isFile && f.length() < PockitLfs.POINTER_MAX && PockitLfs.parsePointer(f.readBytes())?.oid == p.oid
+            }
+        }.map { it.first }
+        if (toCheckout.isNotEmpty()) {
+            val checkout = git.checkout()
+            toCheckout.forEach(checkout::addPath)
+            checkout.call()
+        }
+        missing.size
+    }
+
+    override suspend fun lfsTrack(pattern: String) = engine.io {
+        val file = File(repo.workTree, ".gitattributes")
+        val current = if (file.isFile) file.readText() else ""
+        val line = "${pattern.trim()} filter=lfs diff=lfs merge=lfs -text"
+        if (current.lineSequence().none { it.trim().startsWith(pattern.trim() + " ") && it.contains("filter=lfs") }) {
+            file.writeText(current + (if (current.isEmpty() || current.endsWith("\n")) "" else "\n") + line + "\n")
+        }
+        git.add().addFilepattern(".gitattributes").call()
+        Unit
+    }
+
+    /** Uploads LFS content referenced by commits the remote doesn't have yet. */
+    private fun uploadOutgoingLfs(remote: String, credentials: GitCredentials) {
+        val head = repo.resolve(Constants.HEAD) ?: return
+        val pointers = LinkedHashMap<String, LfsPointer>()
+        RevWalk(repo).use { walk ->
+            walk.markStart(walk.parseCommit(head))
+            repo.refDatabase.getRefsByPrefix("${Constants.R_REMOTES}$remote/").forEach { ref ->
+                runCatching { walk.markUninteresting(walk.parseCommit(ref.objectId)) }
+            }
+            for (commit in walk) {
+                for (entry in commitEntries(walk, walk.parseCommit(commit))) {
+                    if (entry.changeType == DiffEntry.ChangeType.DELETE) continue
+                    val loader = repo.open(entry.newId.toObjectId())
+                    if (loader.size >= PockitLfs.POINTER_MAX) continue
+                    PockitLfs.parsePointer(loader.bytes)?.takeIf(::hasMedia)?.let { pointers[it.oid.name()] = it }
+                }
+            }
+        }
+        if (pointers.isEmpty()) return
+        val endpoint = LfsTransfer.endpoint(repo, remote, "upload", credentials, engine.sshFactory(credentials))
+        val items = LfsTransfer.batch(endpoint, "upload", pointers.values)
+        items.firstOrNull { it.error != null }?.let { throw GitException("LFS: ${it.error}") }
+        items.forEach { LfsTransfer.upload(repo, it) }
     }
 
     override suspend fun reflog(maxCount: Int): List<ReflogEntryInfo> = engine.io {

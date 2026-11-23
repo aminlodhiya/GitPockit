@@ -34,6 +34,8 @@ data class CloneOptions(
     /** 0 = full history; >0 = shallow clone with that many commits. */
     val depth: Int = 0,
     val cloneSubmodules: Boolean = false,
+    /** Download Git LFS files after cloning (otherwise they stay as small pointer files). */
+    val downloadLfs: Boolean = true,
 )
 
 data class RepoStatus(
@@ -226,3 +228,49 @@ data class Comparison(val from: String, val to: String, val changes: List<FileCh
 data class LineSelection(val oldLines: Set<Int> = emptySet(), val newLines: Set<Int> = emptySet()) {
     val isEmpty: Boolean get() = oldLines.isEmpty() && newLines.isEmpty()
 }
+
+/** Key used to sign commits and annotated tags. Material is decrypted by the caller. */
+sealed interface SigningKey {
+    class Ssh(val privateKey: ByteArray, val passphrase: String?) : SigningKey
+
+    class OpenPgp(val armoredSecret: String, val passphrase: String?) : SigningKey
+}
+
+/** Keys the user owns, to recognise their own signatures. */
+data class TrustedKeys(val sshFingerprints: Set<String> = emptySet(), val pgpPublicKeys: List<String> = emptyList())
+
+enum class SignatureState {
+    UNSIGNED,
+    /** Valid signature by one of the user's keys. */
+    VERIFIED,
+    /** Valid SSH signature by a key the user doesn't have, or an OpenPGP key we can't check. */
+    UNKNOWN_KEY,
+    /** The signature doesn't match the commit. */
+    BAD,
+}
+
+data class SignatureInfo(val state: SignatureState, val format: String?, val fingerprint: String?, val message: String?)
+
+enum class SubmoduleState {
+    /** Listed in .gitmodules but not downloaded yet. */
+    UNINITIALIZED,
+    /** Registered but its folder is missing. */
+    MISSING,
+    /** Checked out at the commit the parent repository expects. */
+    UP_TO_DATE,
+    /** Checked out at a different commit than the parent expects (needs update, or commit the change). */
+    DIFFERENT_COMMIT,
+}
+
+data class SubmoduleInfo(
+    val path: String,
+    val url: String?,
+    val state: SubmoduleState,
+    /** Commit recorded in the parent repository. */
+    val expectedId: String?,
+    /** Commit currently checked out in the submodule. */
+    val checkedOutId: String?,
+)
+
+/** A Git LFS file in the repository. */
+data class LfsFile(val path: String, val oid: String, val size: Long, val downloaded: Boolean)

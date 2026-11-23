@@ -136,6 +136,13 @@ class FilesViewModel @Inject constructor(savedState: SavedStateHandle, ops: Repo
     fun delete(path: String) = fileOp { it.delete(path) }
     fun ignore(path: String, deviceOnly: Boolean) = fileOp { it.addIgnoreRule("/$path", deviceOnly) }
 
+    fun trackLfs(extension: String) {
+        viewModelScope.launch {
+            runCatching { ops.write(repoId) { _, git -> git.lfsTrack("*.$extension") } }
+                .onFailure { it.report() }
+        }
+    }
+
     private fun fileOp(block: suspend (RepoFiles) -> Unit) {
         viewModelScope.launch {
             runCatching {
@@ -210,6 +217,10 @@ fun FilesTab(
                         menu = buildList {
                             if (!e.isDirectory && e.kind != FileKind.BINARY) add(stringResource(R.string.files_open_with) to { s.root?.let { context.openWithOtherApp(File(it, e.path)) } })
                             if (!e.isDirectory) add(stringResource(R.string.file_history) to { onFileHistory(e.path) })
+                            val ext = e.name.substringAfterLast('.', "")
+                            if (!e.isDirectory && ext.isNotEmpty() && ext.length <= 10) {
+                                add(stringResource(R.string.files_track_lfs, ext) to { viewModel.trackLfs(ext) })
+                            }
                             add(stringResource(R.string.action_rename) to { renaming = e })
                             add(stringResource(R.string.files_ignore) to { viewModel.ignore(e.path + if (e.isDirectory) "/" else "", deviceOnly = false) })
                             add(stringResource(R.string.files_ignore_device) to { viewModel.ignore(e.path + if (e.isDirectory) "/" else "", deviceOnly = true) })

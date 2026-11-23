@@ -36,6 +36,9 @@ interface RepoDao {
     @Query("UPDATE repos SET credentialId = :credentialId WHERE id = :id")
     suspend fun setCredential(id: Long, credentialId: Long?)
 
+    @Query("UPDATE repos SET signingCredentialId = :credentialId WHERE id = :id")
+    suspend fun setSigningCredential(id: Long, credentialId: Long?)
+
     @Query("UPDATE repos SET lastSyncAt = :at, lastError = :error, pendingSync = :pending WHERE id = :id")
     suspend fun setSyncResult(id: Long, at: Long, error: String?, pending: Boolean)
 
@@ -102,6 +105,9 @@ interface CredentialDao {
 
     @Query("SELECT * FROM credentials WHERE id = :id")
     suspend fun get(id: Long): CredentialEntity?
+
+    @Query("SELECT * FROM credentials")
+    suspend fun all(): List<CredentialEntity>
 
     @Insert
     suspend fun insert(credential: CredentialEntity): Long

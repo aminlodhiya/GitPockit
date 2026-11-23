@@ -55,6 +55,8 @@ class RepoOps(
 
     suspend fun credentialsFor(repo: Repo): GitCredentials = credentials.resolve(repo.credentialId)
 
+    suspend fun trustedKeys() = credentials.trustedKeys()
+
     suspend fun authorFor(repo: Repo): GitAuthor {
         val name = repo.authorName
         val email = repo.authorEmail
@@ -77,6 +79,9 @@ class RepoOps(
                 engine.open(repo.directory).use { git ->
                     // Commits JGit makes by itself (merges, rebases…) get the right author.
                     git.setIdentity(authorFor(repo))
+                    // Always set explicitly: a repo's own config may ask for a key that isn't on this device.
+                    git.setSigning(credentials.signingKey(repo.signingCredentialId))
+                    git.setLfsAutoDownload(repo.sync.lfsDownload)
                     block(repo, git)
                 }
             } finally {

@@ -73,6 +73,8 @@ data class CloneUiState(
     val branch: String = "",
     val credentialId: Long? = null,
     val shallow: Boolean = false,
+    val submodules: Boolean = true,
+    val lfs: Boolean = true,
     val parentDir: File? = null,
     val running: Boolean = false,
     val progressTask: String = "",
@@ -139,6 +141,8 @@ class CloneViewModel @Inject constructor(
                         credentials = credentialRepo.resolve(s.credentialId),
                         branch = s.branch.trim().ifBlank { null },
                         depth = if (s.shallow) 1 else 0,
+                        cloneSubmodules = s.submodules,
+                        downloadLfs = s.lfs,
                     ),
                 ) { task, done, total ->
                     _state.update { it.copy(progressTask = task, progress = if (total > 0) done.toFloat() / total else null) }
@@ -251,6 +255,14 @@ fun CloneScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = s.shallow, onCheckedChange = { v -> viewModel.update { it.copy(shallow = v) } })
                 Text(stringResource(R.string.clone_shallow), style = MaterialTheme.typography.bodyMedium)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = s.submodules, onCheckedChange = { v -> viewModel.update { it.copy(submodules = v) } })
+                Text(stringResource(R.string.clone_submodules), style = MaterialTheme.typography.bodyMedium)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = s.lfs, onCheckedChange = { v -> viewModel.update { it.copy(lfs = v) } })
+                Text(stringResource(R.string.clone_lfs), style = MaterialTheme.typography.bodyMedium)
             }
 
             s.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }

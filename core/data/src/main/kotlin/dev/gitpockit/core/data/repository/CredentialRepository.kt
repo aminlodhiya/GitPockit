@@ -6,7 +6,10 @@ import dev.gitpockit.core.data.model.Credential
 import dev.gitpockit.core.data.model.CredentialType
 import dev.gitpockit.core.git.GitCredentials
 import dev.gitpockit.core.git.GitException
+import dev.gitpockit.core.git.SigningKey
 import dev.gitpockit.core.git.SshKeys
+import dev.gitpockit.core.git.TrustedKeys
+import dev.gitpockit.core.git.signing.OpenPgp
 import dev.gitpockit.core.security.SecretCipher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -51,6 +54,59 @@ class CredentialRepository(
             checkNotNull(dao.get(id)).toModel()
         }
 
+    /** Generates an OpenPGP key for signing commits as "[name] <[email]>". */
+    suspend fun generateGpg(label: String, name: String, email: String): Credential =
+        withContext(Dispatchers.Default) {
+            val key = OpenPgp.generate(name, email)
+            checkNotNull(dao.get(insertGpg(label, key, null))).toModel()
+        }
+
+    /** Imports `gpg --export-secret-keys --armor` output. Throws [GitException] on a bad key or passphrase. */
+    suspend fun importGpg(label: String, armoredSecret: String, passphrase: String?): Long =
+        withContext(Dispatchers.Default) {
+            val key = OpenPgp.inspect(armoredSecret.trim(), passphrase?.ifEmpty { null })
+            insertGpg(label, key, passphrase?.ifEmpty { null })
+        }
+
+    private suspend fun insertGpg(label: String, key: OpenPgp.KeyInfo, passphrase: String?): Long = dao.insert(
+        CredentialEntity(
+            label = label.trim().ifBlank { key.userId.ifBlank { "GPG key" } },
+            type = CredentialType.GPG.name,
+            username = key.userId,
+            secret = cipher.encrypt(key.armoredSecret.toByteArray()),
+            passphrase = passphrase?.let { cipher.encrypt(it.toByteArray()) },
+            publicKey = key.armoredPublic,
+            fingerprint = key.fingerprint,
+            createdAt = clock(),
+        ),
+    )
+
+    /** Decrypted signing key for an SSH or GPG credential, or null (none / HTTPS / missing). */
+    suspend fun signingKey(id: Long?): SigningKey? {
+        if (id == null) return null
+        val entity = dao.get(id) ?: return null
+        return withContext(Dispatchers.Default) {
+            val secret = runCatching { cipher.decrypt(entity.secret) }.getOrElse {
+                throw GitException("Signing key \"${entity.label}\" can't be decrypted. Please add it again.", it)
+            }
+            val passphrase = entity.passphrase?.let { String(cipher.decrypt(it)) }
+            when (CredentialType.valueOf(entity.type)) {
+                CredentialType.SSH -> SigningKey.Ssh(secret, passphrase)
+                CredentialType.GPG -> SigningKey.OpenPgp(String(secret), passphrase)
+                CredentialType.HTTPS -> null
+            }
+        }
+    }
+
+    /** The user's own public keys, to show their commits as verified. */
+    suspend fun trustedKeys(): TrustedKeys {
+        val all = dao.all()
+        return TrustedKeys(
+            sshFingerprints = all.filter { it.type == CredentialType.SSH.name }.mapNotNull { it.fingerprint }.toSet(),
+            pgpPublicKeys = all.filter { it.type == CredentialType.GPG.name }.mapNotNull { it.publicKey },
+        )
+    }
+
     suspend fun rename(id: Long, label: String) = dao.rename(id, label.trim())
 
     suspend fun delete(id: Long) = dao.delete(id)
@@ -70,6 +126,7 @@ class CredentialRepository(
                     passphrase = entity.passphrase?.let { String(cipher.decrypt(it)) },
                     username = entity.username,
                 )
+                CredentialType.GPG -> GitCredentials.None // signing only, not for network access
             }
         }
     }

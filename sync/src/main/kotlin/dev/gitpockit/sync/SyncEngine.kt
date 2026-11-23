@@ -162,6 +162,11 @@ class SyncEngine(
                 pushed = true
             }
 
+            // Pulled commits may point submodules at new commits; bring them along (best effort).
+            if (pulled && repo.sync.updateSubmodules) {
+                runCatching { if (git.submodules().isNotEmpty()) git.updateSubmodules(credentials = credentials) }
+            }
+
             val changed = committed || pulled || pushed
             SyncOutcome(
                 if (changed) SyncResult.SYNCED else SyncResult.UP_TO_DATE,

@@ -22,6 +22,8 @@ import org.eclipse.jgit.api.errors.TransportException
 import org.eclipse.jgit.lib.Constants
 import org.eclipse.jgit.lib.ProgressMonitor
 import org.eclipse.jgit.lib.RepositoryCache
+import dev.gitpockit.core.git.jgit.lfs.PockitLfs
+import org.eclipse.jgit.transport.SshSessionFactory
 import org.eclipse.jgit.transport.SshTransport
 import org.eclipse.jgit.transport.URIish
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
@@ -42,6 +44,7 @@ class JGitEngine(
 
     init {
         JschSetup.ensure()
+        PockitLfs.ensure()
         appDataDir.mkdirs()
         FS.DETECTED.setUserHome(appDataDir)
     }
@@ -56,6 +59,13 @@ class JGitEngine(
         }
 
     override suspend fun clone(options: CloneOptions, progress: GitProgress?): GitRepository {
+        val repo = cloneInternal(options, progress)
+        // LFS files were checked out as pointers; fetch their content now (best effort).
+        if (options.downloadLfs && repo.usesLfs()) runCatching { repo.lfsDownload("origin", options.credentials) }
+        return repo
+    }
+
+    private suspend fun cloneInternal(options: CloneOptions, progress: GitProgress?): GitRepository {
         val job = coroutineContext[Job]
         return io {
             if (isRemoteEmpty(options)) return@io initTrackingEmptyRemote(options)
@@ -102,8 +112,15 @@ class JGitEngine(
         JGitRepository(Git.open(directory), this)
     }
 
-    override fun isRepository(directory: File): Boolean =
-        RepositoryCache.FileKey.isGitRepository(File(directory, ".git"), FS.DETECTED)
+    override fun isRepository(directory: File): Boolean {
+        val dotGit = File(directory, ".git")
+        if (RepositoryCache.FileKey.isGitRepository(dotGit, FS.DETECTED)) return true
+        // Submodules and worktrees use a ".git" *file*: "gitdir: <path to the real git dir>".
+        if (!dotGit.isFile) return false
+        val target = dotGit.readText().trim().removePrefix("gitdir:").trim().takeIf { it.isNotEmpty() } ?: return false
+        val gitDir = File(target).let { if (it.isAbsolute) it else File(directory, target) }
+        return RepositoryCache.FileKey.isGitRepository(gitDir.canonicalFile, FS.DETECTED)
+    }
 
     internal suspend fun <T> io(block: () -> T): T = withContext(dispatcher) {
         try {
@@ -114,6 +131,10 @@ class JGitEngine(
             throw mapException(e)
         }
     }
+
+    /** SSH session factory for [credentials] (used for LFS's git-lfs-authenticate), or null. */
+    internal fun sshFactory(credentials: GitCredentials): SshSessionFactory? =
+        (credentials as? GitCredentials.SshKey)?.let { KeySshSessionFactory(it, knownHostsFile) }
 
     internal fun applyCredentials(cmd: TransportCommand<*, *>, credentials: GitCredentials) {
         when (credentials) {

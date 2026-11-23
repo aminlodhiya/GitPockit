@@ -23,6 +23,8 @@ import dev.gitpockit.ui.repo.BlameScreen
 import dev.gitpockit.ui.repo.CommitScreen
 import dev.gitpockit.ui.repo.CompareScreen
 import dev.gitpockit.ui.repo.FileHistoryScreen
+import dev.gitpockit.ui.repo.LfsScreen
+import dev.gitpockit.ui.repo.SubmodulesScreen
 import dev.gitpockit.ui.repo.ConflictsScreen
 import dev.gitpockit.ui.repo.EditConflictScreen
 import dev.gitpockit.ui.repo.ReflogScreen
@@ -47,6 +49,8 @@ object Routes {
     const val DIFF = "repo/{repoId}/diff?path={path}&commit={commit}&staged={staged}&from={from}&to={to}"
     const val FILE_HISTORY = "repo/{repoId}/file-history?path={path}"
     const val EDITOR = "repo/{repoId}/edit?path={path}"
+    const val SUBMODULES = "repo/{repoId}/submodules"
+    const val LFS = "repo/{repoId}/lfs"
     const val IMAGE = "repo/{repoId}/image?path={path}"
     const val BLAME = "repo/{repoId}/blame?path={path}"
     const val COMPARE = "repo/{repoId}/compare?from={from}&to={to}"
@@ -71,6 +75,8 @@ object Routes {
         "repo/$id/diff?path=${Uri.encode(path)}&commit=${commit.orEmpty()}&staged=$staged"
     fun compareDiff(id: Long, from: String, to: String, path: String) =
         "repo/$id/diff?path=${Uri.encode(path)}&from=${Uri.encode(from)}&to=${Uri.encode(to)}"
+    fun submodules(id: Long) = "repo/$id/submodules"
+    fun lfs(id: Long) = "repo/$id/lfs"
     fun editor(id: Long, path: String) = "repo/$id/edit?path=${Uri.encode(path)}"
     fun image(id: Long, path: String) = "repo/$id/image?path=${Uri.encode(path)}"
     fun fileHistory(id: Long, path: String) = "repo/$id/file-history?path=${Uri.encode(path)}"
@@ -160,6 +166,8 @@ fun GitPockitNavHost(deepLink: DeepLink? = null, onDeepLinkHandled: () -> Unit =
                 onOpenEditor = { nav.navigate(Routes.editor(id, it)) },
                 onOpenImage = { nav.navigate(Routes.image(id, it)) },
                 onFileHistory = { nav.navigate(Routes.fileHistory(id, it)) },
+                onOpenSubmodules = { nav.navigate(Routes.submodules(id)) },
+                onOpenLfs = { nav.navigate(Routes.lfs(id)) },
             )
         }
         composable(Routes.REPO_SETTINGS, arguments = listOf(repoIdArg)) { entry ->
@@ -219,6 +227,12 @@ fun GitPockitNavHost(deepLink: DeepLink? = null, onDeepLinkHandled: () -> Unit =
                 onFileHistory = { nav.navigate(Routes.fileHistory(id, it)) },
                 onBlame = { nav.navigate(Routes.blame(id, it)) },
             )
+        }
+        composable(Routes.SUBMODULES, arguments = listOf(repoIdArg)) {
+            SubmodulesScreen(onBack = { nav.popBackStack() }, onOpenRepo = { nav.navigate(Routes.repo(it)) })
+        }
+        composable(Routes.LFS, arguments = listOf(repoIdArg)) {
+            LfsScreen(onBack = { nav.popBackStack() })
         }
         composable(Routes.EDITOR, arguments = listOf(repoIdArg, navArgument("path") { type = NavType.StringType })) {
             EditorScreen(onBack = { nav.popBackStack() })

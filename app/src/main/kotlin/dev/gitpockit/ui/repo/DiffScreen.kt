@@ -336,7 +336,7 @@ private fun LineRow(line: DiffLine, numberWidth: Dp, wrap: Boolean, isSelected: 
     val selectable = onToggle != null && line.type != DiffLineType.CONTEXT
     var modifier = Modifier.fillMaxWidth().background(if (isSelected) fg.copy(alpha = 0.32f) else bg)
     if (isSelected) modifier = modifier.border(1.dp, fg)
-    if (selectable) modifier = modifier.clickable { onToggle?.invoke(line) }
+    if (selectable) modifier = modifier.clickable { onToggle(line) }
     val small = CodeTextStyle.copy(fontSize = 11.sp)
     Row(modifier, verticalAlignment = Alignment.Top) {
         Text(line.oldLine?.toString().orEmpty(), style = small, color = ext.textSecondary, modifier = Modifier.width(numberWidth).padding(start = 4.dp))

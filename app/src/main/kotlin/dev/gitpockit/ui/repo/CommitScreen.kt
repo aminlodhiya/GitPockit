@@ -56,6 +56,10 @@ import dev.gitpockit.core.git.CommitDetail
 import dev.gitpockit.core.git.GitRepository
 import dev.gitpockit.core.git.OperationResult
 import dev.gitpockit.core.git.ResetMode
+import dev.gitpockit.core.git.SignatureInfo
+import dev.gitpockit.core.git.SignatureState
+import androidx.compose.material.icons.filled.GppMaybe
+import androidx.compose.material.icons.filled.VerifiedUser
 import dev.gitpockit.ui.common.InputDialog
 import dev.gitpockit.ui.common.ResetDialog
 import kotlinx.coroutines.channels.Channel
@@ -81,6 +85,8 @@ class CommitViewModel @Inject constructor(
     val detail: StateFlow<CommitDetail?> = _detail
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
+    private val _signature = MutableStateFlow<SignatureInfo?>(null)
+    val signature: StateFlow<SignatureInfo?> = _signature
     private val _branch = MutableStateFlow("HEAD")
     val branch: StateFlow<String> = _branch
     private val _conflicts = Channel<Unit>(Channel.CONFLATED)
@@ -93,6 +99,8 @@ class CommitViewModel @Inject constructor(
             runCatching { ops.read(repoId) { _, git -> git.commitDetail(commitId) to git.currentBranch().orEmpty() } }
                 .onSuccess { (d, b) -> _detail.value = d; _branch.value = b }
                 .onFailure { _error.value = it.message }
+            runCatching { ops.read(repoId) { _, git -> git.signature(commitId, ops.trustedKeys()) } }
+                .onSuccess { _signature.value = it }
         }
     }
 
@@ -149,6 +157,7 @@ fun CommitScreen(
     val detail by viewModel.detail.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val branch by viewModel.branch.collectAsStateWithLifecycle()
+    val signature by viewModel.signature.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val ext = GitPockitTheme.extendedColors
     val snackbar = remember { SnackbarHostState() }
@@ -209,6 +218,23 @@ fun CommitScreen(
                     )
                     Text(fullDate.format(d.info.time.atZone(ZoneId.systemDefault())), style = MaterialTheme.typography.bodySmall, color = ext.textSecondary)
                     SelectionContainer { Text(d.info.id, style = CodeTextStyle, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp)) }
+                    signature?.let { sig ->
+                        val (text, color) = when (sig.state) {
+                            SignatureState.VERIFIED -> stringResource(R.string.signature_verified) to ext.added
+                            SignatureState.UNKNOWN_KEY -> stringResource(R.string.signature_unknown) to ext.modified
+                            SignatureState.BAD -> stringResource(R.string.signature_bad) to ext.removed
+                            SignatureState.UNSIGNED -> stringResource(R.string.signature_unsigned) to ext.textSecondary
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                            Icon(if (sig.state == SignatureState.VERIFIED) Icons.Default.VerifiedUser else Icons.Default.GppMaybe, null, tint = color)
+                            Text(
+                                text + (sig.format?.let { " (${it.uppercase()})" } ?: ""),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = color,
+                                modifier = Modifier.padding(start = 6.dp),
+                            )
+                        }
+                    }
                     if (d.info.parentIds.isNotEmpty()) {
                         Text(
                             stringResource(R.string.commit_parents) + ": " + d.info.parentIds.joinToString { it.take(7) },

@@ -4,7 +4,7 @@
 
 GitPockit is a free, open-source Git client for Android. Keep any folder on your phone — notes, an Obsidian vault, dotfiles, docs, code — in sync with a Git repository, and use the full power of Git from your phone.
 
-> Status: **early development (v0.6, Phase 3c-1)**. Core Git, automatic background sync, advanced Git operations, history tools and in-app file editing work. Expect breaking changes.
+> Status: **early development (v0.7, Phase 3)**. Core Git, automatic background sync, advanced Git operations, history tools, file editing, signed commits, submodules and Git LFS work. Expect breaking changes.
 
 ## Features
 
@@ -18,6 +18,9 @@ GitPockit is a free, open-source Git client for Android. Keep any folder on your
 - **Stage or unstage individual lines or hunks** from the diff view
 - **File explorer** with Git status badges: create, rename, delete, ignore (`.gitignore` or this device only), open with other apps
 - **Code editor** with syntax highlighting for ~40 file types, line numbers, find & replace, undo/redo, word wrap
+- **Signed commits**: SSH signing with your SSH key, or OpenPGP (generate or import a GPG key); merges, rebases, cherry-picks and annotated tags are signed too, and commits show whether they're signed by your key
+- **Submodules**: clone with submodules, update, add, open a submodule as its own repository, optional update after pull
+- **Git LFS**: large files are downloaded on clone/pull and uploaded before push (HTTPS token or SSH `git-lfs-authenticate`); not-yet-downloaded files stay as clean placeholders; track file types from the app
 - **Markdown preview**, **image viewer** (zoom; SVG and animated GIF), editors for `.gitignore` and `.git/info/exclude`
 - Branches: create, switch (including remote branches), rename, delete, **merge** and **rebase**
 - **Stash** (save with message, include new files, apply, pop, drop), **tags** (lightweight/annotated, push, delete locally or on the remote, check out)
@@ -34,9 +37,8 @@ GitPockit is a free, open-source Git client for Android. Keep any folder on your
 - Premium dark theme (default), simple light theme, AMOLED black, optional Material You colors
 
 **On the roadmap**
-- Submodules, Git LFS
 - GitHub / GitLab / Gitea sign-in, issues, pull requests and CI runs
-- Signed commits, biometric lock, backup/restore
+- Biometric lock, backup/restore
 - Opt-in AI helpers with your own API key (hidden by default)
 
 ## Building

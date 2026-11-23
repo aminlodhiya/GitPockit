@@ -13,8 +13,8 @@ android {
         applicationId = "dev.gitpockit"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.6.0"
+        versionCode = 7
+        versionName = "0.7.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -49,6 +49,8 @@ android {
                 "META-INF/LICENSE*",
                 "META-INF/NOTICE*",
                 "plugin.properties",
+                // Eclipse/OSGi plugin metadata duplicated by JGit modules; unused on Android.
+                "OSGI-INF/**",
                 "about.html",
             )
         }

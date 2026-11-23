@@ -31,7 +31,7 @@ data class CredentialEntity(
 
 @Entity(
     tableName = "repos",
-    indices = [Index("localPath", unique = true), Index("containerId"), Index("credentialId")],
+    indices = [Index("localPath", unique = true), Index("containerId"), Index("credentialId"), Index("signingCredentialId")],
     foreignKeys = [
         ForeignKey(
             entity = ContainerEntity::class,
@@ -43,6 +43,12 @@ data class CredentialEntity(
             entity = CredentialEntity::class,
             parentColumns = ["id"],
             childColumns = ["credentialId"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
+        ForeignKey(
+            entity = CredentialEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["signingCredentialId"],
             onDelete = ForeignKey.SET_NULL,
         ),
     ],
@@ -77,6 +83,12 @@ data class RepoEntity(
     @ColumnInfo(defaultValue = "") val syncTimes: String = "",
     /** Pull with rebase instead of merge, for a linear history (v4). */
     @ColumnInfo(defaultValue = "0") val pullRebase: Boolean = false,
+    /** Credential (SSH or GPG key) used to sign commits (v5). */
+    val signingCredentialId: Long? = null,
+    /** Download Git LFS files automatically on pull (v6). */
+    @ColumnInfo(defaultValue = "1") val lfsDownload: Boolean = true,
+    /** Update submodules after pulling (v6). */
+    @ColumnInfo(defaultValue = "1") val updateSubmodules: Boolean = true,
 )
 
 @Entity(

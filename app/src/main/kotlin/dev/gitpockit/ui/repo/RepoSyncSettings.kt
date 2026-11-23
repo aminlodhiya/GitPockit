@@ -142,6 +142,12 @@ fun SyncSettingsCard(settings: SyncSettings, onChange: (SyncSettings) -> Unit, o
         SwitchRow(stringResource(R.string.pull_rebase), stringResource(R.string.pull_rebase_desc), settings.pullRebase) {
             onChange(settings.copy(pullRebase = it))
         }
+        SwitchRow(stringResource(R.string.sync_lfs), stringResource(R.string.sync_lfs_desc), settings.lfsDownload) {
+            onChange(settings.copy(lfsDownload = it))
+        }
+        SwitchRow(stringResource(R.string.sync_submodules), stringResource(R.string.sync_submodules_desc), settings.updateSubmodules) {
+            onChange(settings.copy(updateSubmodules = it))
+        }
         if (settings.mode == SyncMode.FULL) {
             Picker(
                 label = stringResource(R.string.conflict_strategy),

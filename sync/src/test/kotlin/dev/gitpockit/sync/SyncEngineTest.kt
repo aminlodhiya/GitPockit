@@ -73,7 +73,8 @@ class SyncEngineTest {
     private fun laptop(block: suspend (GitRepository) -> Unit) = kotlinx.coroutines.runBlocking {
         val dir = tmp.newFolder()
         dir.delete()
-        engine.clone(CloneOptions(remote.toURI().toString(), dir)).use { git ->
+        engine.clone(CloneOptions(remote.toURI().toString(), dir, cloneSubmodules = true)).use { git ->
+            git.setIdentity(other)
             block(git)
             git.stageAll()
             if (!git.status().isClean || git.log(1).isEmpty()) git.commit("laptop edit", other)
@@ -277,6 +278,40 @@ class SyncEngineTest {
         val again = sync.sync(id, SyncTrigger.SCHEDULE)
         assertEquals(SyncResult.CONFLICTS, again.result)
         assertTrue(again.message!!, again.message!!.contains("rebase"))
+    }
+
+    @Test fun syncUpdatesSubmodulesAfterPull() = runTest {
+        // A library repo, added to the project as a submodule by the laptop.
+        val libRemote = tmp.newFolder("lib.git")
+        Git.init().setBare(true).setInitialBranch("main").setDirectory(libRemote).call().close()
+        laptopOf(libRemote) { it.write("lib.txt", "v1\n") }
+        val id = phone()
+        laptop { git -> git.addSubmodule("lib", libRemote.toURI().toString()) }
+
+        val out = sync.sync(id, SyncTrigger.SCHEDULE)
+        assertTrue(out.pulled)
+        assertEquals("v1\n", phoneFile("lib/lib.txt").readText())
+
+        repos.updateSyncSettings(id, SyncSettings(updateSubmodules = false))
+        laptopOf(libRemote) { it.write("lib.txt", "v2\n") }
+        laptop { git ->
+            engine.open(File(git.workTree, "lib")).use { lib -> lib.checkout("main"); lib.pull() }
+        }
+        sync.sync(id, SyncTrigger.SCHEDULE)
+        assertEquals("v1\n", phoneFile("lib/lib.txt").readText()) // left alone when turned off
+    }
+
+    /** Like [laptop] but for any remote. */
+    private fun laptopOf(remoteDir: File, block: suspend (GitRepository) -> Unit) = kotlinx.coroutines.runBlocking {
+        val dir = tmp.newFolder()
+        dir.delete()
+        engine.clone(CloneOptions(remoteDir.toURI().toString(), dir)).use { git ->
+            git.setIdentity(other)
+            block(git)
+            git.stageAll()
+            if (!git.status().isClean || git.log(1).isEmpty()) git.commit("laptop edit", other)
+            assertTrue(git.push().isSuccess)
+        }
     }
 
     @Test fun conflictCopyNames() = runTest {

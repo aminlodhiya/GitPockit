@@ -66,6 +66,7 @@ desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs_nio", version.
 
 jgit = { module = "org.eclipse.jgit:org.eclipse.jgit", version.ref = "jgit" }
 jgit-ssh-jsch = { module = "org.eclipse.jgit:org.eclipse.jgit.ssh.jsch", version.ref = "jgit" }
+jgit-lfs = { module = "org.eclipse.jgit:org.eclipse.jgit.lfs", version.ref = "jgit" }
 jsch = { module = "com.github.mwiede:jsch", version.ref = "jsch" }
 
 junit = { module = "junit:junit", version.ref = "junit" }
@@ -76,6 +77,7 @@ room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 androidx-test-core = { module = "androidx.test:core-ktx", version.ref = "androidxTestCore" }
 bouncycastle-prov = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
+bouncycastle-pg = { module = "org.bouncycastle:bcpg-jdk18on", version.ref = "bouncycastle" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

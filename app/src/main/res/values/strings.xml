@@ -479,4 +479,57 @@
     <string name="editor_unsaved_title">Save changes?</string>
     <string name="editor_unsaved_message">%1$s has unsaved changes.</string>
     <string name="editor_discard">Discard</string>
+
+    <!-- Phase 3c-2: signed commits -->
+    <string name="cred_tab_gpg_generate">New GPG key</string>
+    <string name="cred_tab_gpg_import">Import GPG key</string>
+    <string name="cred_type_gpg">GPG signing key</string>
+    <string name="gpg_name">Name on the key</string>
+    <string name="gpg_email">Email on the key</string>
+    <string name="gpg_email_help">Use an email verified on your GitHub/GitLab account, the same one your commits use.</string>
+    <string name="gpg_generate">Generate GPG key</string>
+    <string name="gpg_generating">Generating (this takes a few seconds)…</string>
+    <string name="gpg_secret_key">Secret key (gpg --export-secret-keys --armor)</string>
+    <string name="gpg_public_key_help">Add this public key to your Git host: on GitHub go to Settings → SSH and GPG keys → New GPG key. The secret key never leaves this phone.</string>
+    <string name="signing_section">Signed commits</string>
+    <string name="signing_with">Sign commits with</string>
+    <string name="signing_none">Don\'t sign</string>
+    <string name="signing_help">Signed commits show as \"Verified\" on GitHub/GitLab. Add the key\'s public part there: an SSH key as a \"Signing key\", a GPG key under GPG keys. Your commit email must match a verified email on the account.</string>
+    <string name="signature_verified">Signed with your key</string>
+    <string name="signature_unknown">Signed by a key that isn\'t on this device</string>
+    <string name="signature_bad">Signature doesn\'t match: the commit may have been altered</string>
+    <string name="signature_unsigned">Not signed</string>
+
+    <!-- Phase 3c-2: submodules and LFS -->
+    <string name="clone_submodules">Clone submodules too</string>
+    <string name="clone_lfs">Download large files (Git LFS)</string>
+    <string name="menu_submodules">Submodules</string>
+    <string name="menu_lfs">Large files (LFS)</string>
+    <string name="sync_lfs">Download large files automatically</string>
+    <string name="sync_lfs_desc">Git LFS files are fetched when pulling. Off: they stay as small placeholders until you download them.</string>
+    <string name="sync_submodules">Update submodules after pull</string>
+    <string name="sync_submodules_desc">Keep nested repositories at the commits this repository expects</string>
+    <string name="submodules_empty">This repository has no submodules.</string>
+    <string name="submodule_add">Add submodule</string>
+    <string name="submodule_path">Folder (e.g. libs/theme)</string>
+    <string name="submodule_url">Repository URL</string>
+    <string name="submodules_update_all">Download / update all</string>
+    <string name="submodule_update">Download / update</string>
+    <string name="submodule_open">Open as repository</string>
+    <string name="submodule_uninitialized">Not downloaded</string>
+    <string name="submodule_missing">Folder missing</string>
+    <string name="submodule_up_to_date">Up to date</string>
+    <string name="submodule_different">Different commit than expected</string>
+    <string name="submodules_updated">Updated %1$d submodule(s)</string>
+    <string name="submodule_added">Submodule added. Commit to record it.</string>
+    <string name="lfs_not_used">This repository doesn\'t use Git LFS yet. Track a file type to store files like videos, PDFs or design files outside Git history.</string>
+    <string name="lfs_track">Track a file type</string>
+    <string name="lfs_pattern">Pattern (e.g. *.psd or videos/**)</string>
+    <string name="lfs_tracked">Now tracking %1$s with LFS. Commit .gitattributes to share it.</string>
+    <string name="lfs_download_all">Download all</string>
+    <string name="lfs_downloaded">On this device</string>
+    <string name="lfs_not_downloaded">Not downloaded</string>
+    <string name="lfs_download_done">Downloaded %1$d file(s)</string>
+    <string name="lfs_summary">%1$d large file(s), %2$d on this device</string>
+    <string name="files_track_lfs">Track *.%1$s with LFS</string>
 </resources>

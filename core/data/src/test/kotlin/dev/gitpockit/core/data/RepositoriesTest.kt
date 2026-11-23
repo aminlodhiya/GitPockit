@@ -80,6 +80,26 @@ class RepositoriesTest {
         assertTrue(bad is GitException)
     }
 
+    @Test fun gpgKeysGenerateImportAndResolveForSigning() = runTest {
+        val generated = creds.generateGpg("Signing", "Alice", "alice@example.com")
+        assertEquals(CredentialType.GPG, generated.type)
+        assertTrue(generated.publicKey!!.contains("BEGIN PGP PUBLIC KEY BLOCK"))
+        assertEquals(GitCredentials.None, creds.resolve(generated.id)) // never used for network access
+        val key = creds.signingKey(generated.id) as dev.gitpockit.core.git.SigningKey.OpenPgp
+        val reimported = creds.importGpg("Copy", key.armoredSecret, null)
+        assertEquals(generated.fingerprint, creds.credentials.first().first { it.id == reimported }.fingerprint)
+
+        val ssh = creds.generateSsh("ssh", SshKeys.Type.ED25519)
+        assertTrue(creds.signingKey(ssh.id) is dev.gitpockit.core.git.SigningKey.Ssh)
+        assertEquals(null, creds.signingKey(creds.addHttps("t", "u", "p")))
+        val trusted = creds.trustedKeys()
+        assertEquals(setOf(ssh.fingerprint), trusted.sshFingerprints)
+        assertEquals(2, trusted.pgpPublicKeys.size)
+
+        val bad = runCatching { creds.importGpg("x", "not a key", null) }.exceptionOrNull()
+        assertTrue(bad is GitException)
+    }
+
     @Test fun registerListMoveAndRemoveRepos() = runTest {
         val dir = tmp.newFolder("notes")
         engine.init(dir).close()
@@ -101,6 +121,12 @@ class RepositoriesTest {
         val after = repos.get(repo.id)!!
         assertNull(after.credentialId)
         assertNull(after.containerId)
+
+        val signer = creds.generateSsh("sign", SshKeys.Type.ED25519)
+        repos.setSigningCredential(repo.id, signer.id)
+        assertEquals(signer.id, repos.get(repo.id)!!.signingCredentialId)
+        creds.delete(signer.id)
+        assertNull(repos.get(repo.id)!!.signingCredentialId) // deleting the key turns signing off
 
         repos.setAuthor(repo.id, GitAuthor("A", "a@x"))
         assertEquals("A", repos.get(repo.id)!!.authorName)

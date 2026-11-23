@@ -57,6 +57,7 @@ import dev.gitpockit.core.git.GitAuthor
 import dev.gitpockit.data.SettingsRepository
 import dev.gitpockit.ui.common.ConfirmDialog
 import dev.gitpockit.ui.common.CredentialPicker
+import dev.gitpockit.ui.common.SigningKeyPicker
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -82,6 +83,7 @@ class RepoSettingsViewModel @Inject constructor(
 
     fun rename(name: String) = viewModelScope.launch { if (name.isNotBlank()) repos.rename(repoId, name) }
     fun setCredential(id: Long?) = viewModelScope.launch { repos.setCredential(repoId, id) }
+    fun setSigning(id: Long?) = viewModelScope.launch { repos.setSigningCredential(repoId, id) }
     fun setContainer(id: Long?) = viewModelScope.launch { repos.moveToContainer(repoId, id) }
     fun setAuthor(author: GitAuthor?) = viewModelScope.launch { repos.setAuthor(repoId, author) }
     val appTriggers: StateFlow<List<AppTrigger>> = repos.observeAppTriggers(repoId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -153,6 +155,12 @@ fun RepoSettingsScreen(
             GpCard(Modifier.fillMaxWidth()) {
                 CredentialPicker(credentials, r.credentialId, viewModel::setCredential, onAddCredential, Modifier.fillMaxWidth())
                 ContainerPicker(containers, r.containerId, viewModel::setContainer, Modifier.fillMaxWidth().padding(top = 12.dp))
+            }
+
+            GpCard(Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.signing_section), style = MaterialTheme.typography.titleMedium)
+                SigningKeyPicker(credentials, r.signingCredentialId, viewModel::setSigning, onAddCredential, Modifier.fillMaxWidth().padding(top = 8.dp))
+                Text(stringResource(R.string.signing_help), style = MaterialTheme.typography.bodySmall, color = ext.textSecondary, modifier = Modifier.padding(top = 8.dp))
             }
 
             GpCard(Modifier.fillMaxWidth()) {

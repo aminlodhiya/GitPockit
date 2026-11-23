@@ -31,6 +31,15 @@ interface GitRepository : AutoCloseable {
      */
     fun setIdentity(author: GitAuthor)
 
+    /**
+     * Signs every commit and annotated tag made through this instance with [key]
+     * (null turns signing off). In memory only; the repo's .git/config is not changed.
+     */
+    fun setSigning(key: SigningKey?)
+
+    /** Signature status of a commit; [trusted] identifies the user's own keys. */
+    suspend fun signature(commitId: String, trusted: TrustedKeys): SignatureInfo
+
     suspend fun status(): RepoStatus
 
     suspend fun currentBranch(): String?
@@ -193,6 +202,42 @@ interface GitRepository : AutoCloseable {
     suspend fun deleteTag(name: String)
 
     suspend fun pushTag(name: String, remote: String, credentials: GitCredentials, delete: Boolean = false): PushResult
+
+    // ---- Submodules
+
+    suspend fun submodules(): List<SubmoduleInfo>
+
+    /**
+     * Downloads (if needed) and checks out submodules at the commits the parent expects
+     * (`git submodule update --init`). Empty [paths] means all. Returns the updated paths.
+     */
+    suspend fun updateSubmodules(paths: Collection<String> = emptyList(), credentials: GitCredentials = GitCredentials.None): List<String>
+
+    /** Adds a submodule at [path] cloned from [url]; commit afterwards to record it. */
+    suspend fun addSubmodule(path: String, url: String, credentials: GitCredentials = GitCredentials.None)
+
+    /** Copies submodule URLs from .gitmodules into the config (`git submodule sync`). */
+    suspend fun syncSubmodules()
+
+    // ---- Git LFS
+
+    /** Whether the repository tracks files with Git LFS (`filter=lfs` in .gitattributes). */
+    suspend fun usesLfs(): Boolean
+
+    /** LFS files in the current checkout and whether their content is on this device. */
+    suspend fun lfsFiles(): List<LfsFile>
+
+    /**
+     * Downloads missing LFS content and replaces pointer files with it. Empty [paths] means all.
+     * Returns the number of files downloaded.
+     */
+    suspend fun lfsDownload(remote: String = "origin", credentials: GitCredentials = GitCredentials.None, paths: Collection<String> = emptyList()): Int
+
+    /** Tracks files matching [pattern] (e.g. `*.psd`) with LFS from now on, via .gitattributes. */
+    suspend fun lfsTrack(pattern: String)
+
+    /** Whether pull/clone download LFS content automatically (in memory, per opened repo). */
+    fun setLfsAutoDownload(enabled: Boolean)
 
     // ---- Reflog
 

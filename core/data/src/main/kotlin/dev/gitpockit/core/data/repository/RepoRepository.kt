@@ -46,6 +46,10 @@ class RepoRepository(
 
     suspend fun get(id: Long): Repo? = repoDao.get(id)?.toModel()
 
+    /** The registered repo using [directory], if any. */
+    suspend fun findByDirectory(directory: File): Repo? =
+        repoDao.getByPath(withContext(Dispatchers.IO) { directory.canonicalFile }.path)?.toModel()
+
     /**
      * Adds an existing repository on disk to GitPockit.
      * Throws [GitException] if [directory] is not a repository or is already registered.
@@ -87,6 +91,9 @@ class RepoRepository(
 
     suspend fun setCredential(id: Long, credentialId: Long?) = repoDao.setCredential(id, credentialId)
 
+    /** SSH or GPG credential to sign commits with; null turns signing off. */
+    suspend fun setSigningCredential(id: Long, credentialId: Long?) = repoDao.setSigningCredential(id, credentialId)
+
     /** Per-repo author override; pass null to fall back to the global author. */
     suspend fun setAuthor(id: Long, author: GitAuthor?) {
         val repo = repoDao.get(id) ?: return
@@ -116,6 +123,8 @@ class RepoRepository(
                 wifiOnly = settings.wifiOnly,
                 syncTimes = encodeTimes(settings.dailyTimes),
                 pullRebase = settings.pullRebase,
+                lfsDownload = settings.lfsDownload,
+                updateSubmodules = settings.updateSubmodules,
             ),
         )
     }
@@ -208,7 +217,10 @@ class RepoRepository(
             wifiOnly = wifiOnly,
             dailyTimes = decodeTimes(syncTimes),
             pullRebase = pullRebase,
+            lfsDownload = lfsDownload,
+            updateSubmodules = updateSubmodules,
         ),
         pendingSync = pendingSync,
+        signingCredentialId = signingCredentialId,
     )
 }

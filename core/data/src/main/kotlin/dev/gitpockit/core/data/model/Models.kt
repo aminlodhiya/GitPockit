@@ -4,7 +4,12 @@ import java.io.File
 
 data class Container(val id: Long, val name: String)
 
-enum class CredentialType { HTTPS, SSH }
+enum class CredentialType {
+    HTTPS,
+    SSH,
+    /** OpenPGP key used only for signing commits. */
+    GPG,
+}
 
 /** A saved credential. Secrets are never exposed here; see CredentialRepository.resolve. */
 data class Credential(
@@ -28,6 +33,8 @@ data class Repo(
     val lastSyncAt: Long?,
     val lastError: String?,
     val sync: SyncSettings = SyncSettings(),
+    /** SSH or GPG credential used to sign commits; null = unsigned. */
+    val signingCredentialId: Long? = null,
     /** Local commits are waiting for the network to be pushed. */
     val pendingSync: Boolean = false,
 )

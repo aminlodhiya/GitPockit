@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -35,7 +36,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -76,6 +77,7 @@ import dev.gitpockit.ui.common.ConfirmDialog
 import dev.gitpockit.ui.common.userMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -140,14 +142,22 @@ fun CredentialsScreen(onBack: () -> Unit, onAdd: () -> Unit, viewModel: Credenti
                 GpCard(Modifier.fillMaxWidth()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            if (c.type == CredentialType.SSH) Icons.Default.Key else Icons.Default.Lock,
+                            when (c.type) {
+                                CredentialType.SSH -> Icons.Default.Key
+                                CredentialType.GPG -> Icons.Default.VerifiedUser
+                                CredentialType.HTTPS -> Icons.Default.Lock
+                            },
                             null,
                             tint = MaterialTheme.colorScheme.primary,
                         )
                         Column(Modifier.weight(1f).padding(start = 12.dp)) {
                             Text(c.label, style = MaterialTheme.typography.titleMedium)
                             Text(
-                                if (c.type == CredentialType.SSH) c.fingerprint.orEmpty() else stringResource(R.string.cred_type_https, c.username),
+                                when (c.type) {
+                                    CredentialType.SSH -> c.fingerprint.orEmpty()
+                                    CredentialType.GPG -> "${c.username}\n${c.fingerprint.orEmpty().chunked(4).joinToString(" ")}"
+                                    CredentialType.HTTPS -> stringResource(R.string.cred_type_https, c.username)
+                                },
                                 style = CodeTextStyle,
                                 color = ext.textSecondary,
                             )
@@ -193,12 +203,35 @@ data class AddCredentialState(
     /** Set after saving; for generated keys we first show the public key. */
     val savedId: Long? = null,
     val generatedPublicKey: String? = null,
+    val gpgName: String = "",
+    val gpgEmail: String = "",
+    /** Public key shown after generating: SSH or GPG. */
+    val generatedIsGpg: Boolean = false,
 )
 
 @HiltViewModel
-class AddCredentialViewModel @Inject constructor(private val repo: CredentialRepository) : ViewModel() {
+class AddCredentialViewModel @Inject constructor(
+    private val repo: CredentialRepository,
+    settings: dev.gitpockit.data.SettingsRepository,
+) : ViewModel() {
     private val _state = MutableStateFlow(AddCredentialState())
     val state: StateFlow<AddCredentialState> = _state
+
+    init {
+        // Prefill the GPG identity with the default commit author.
+        viewModelScope.launch {
+            val author = settings.author.first()
+            _state.update { it.copy(gpgName = it.gpgName.ifEmpty { author.name }, gpgEmail = it.gpgEmail.ifEmpty { author.email }) }
+        }
+    }
+
+    fun generateGpg() = save { s ->
+        val cred = repo.generateGpg(s.label, s.gpgName.trim(), s.gpgEmail.trim())
+        _state.update { it.copy(generatedPublicKey = cred.publicKey, generatedIsGpg = true) }
+        cred.id
+    }
+
+    fun importGpg() = save { s -> repo.importGpg(s.label, s.privateKey, s.passphrase).also { id -> _done.value = id } }
     private val _done = MutableStateFlow<Long?>(null)
     val done: StateFlow<Long?> = _done
 
@@ -249,8 +282,14 @@ fun AddCredentialScreen(onBack: () -> Unit, onSaved: (Long) -> Unit, viewModel: 
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).imePadding()) {
             if (s.generatedPublicKey == null) {
-                PrimaryTabRow(selectedTabIndex = tab, containerColor = MaterialTheme.colorScheme.background) {
-                    listOf(R.string.cred_tab_https, R.string.cred_tab_ssh_generate, R.string.cred_tab_ssh_import).forEachIndexed { i, label ->
+                PrimaryScrollableTabRow(selectedTabIndex = tab, containerColor = MaterialTheme.colorScheme.background, edgePadding = 8.dp) {
+                    listOf(
+                        R.string.cred_tab_https,
+                        R.string.cred_tab_ssh_generate,
+                        R.string.cred_tab_ssh_import,
+                        R.string.cred_tab_gpg_generate,
+                        R.string.cred_tab_gpg_import,
+                    ).forEachIndexed { i, label ->
                         Tab(selected = tab == i, onClick = { tab = i }, text = { Text(stringResource(label), maxLines = 1) })
                     }
                 }
@@ -265,7 +304,11 @@ fun AddCredentialScreen(onBack: () -> Unit, onSaved: (Long) -> Unit, viewModel: 
                     GpCard(Modifier.fillMaxWidth()) {
                         SelectionContainer { Text(generated, style = CodeTextStyle) }
                     }
-                    Text(stringResource(R.string.ssh_public_key_help), style = MaterialTheme.typography.bodyMedium, color = ext.textSecondary)
+                    Text(
+                        stringResource(if (s.generatedIsGpg) R.string.gpg_public_key_help else R.string.ssh_public_key_help),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ext.textSecondary,
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { context.copyToClipboard("SSH public key", generated) }) {
                             Icon(Icons.Default.ContentCopy, null)
@@ -321,11 +364,29 @@ fun AddCredentialScreen(onBack: () -> Unit, onSaved: (Long) -> Unit, viewModel: 
                             }
                         }
                     }
+                    3 -> {
+                        OutlinedTextField(
+                            value = s.gpgName,
+                            onValueChange = { v -> viewModel.update { it.copy(gpgName = v) } },
+                            label = { Text(stringResource(R.string.gpg_name)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        OutlinedTextField(
+                            value = s.gpgEmail,
+                            onValueChange = { v -> viewModel.update { it.copy(gpgEmail = v) } },
+                            label = { Text(stringResource(R.string.gpg_email)) },
+                            supportingText = { Text(stringResource(R.string.gpg_email_help)) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                     else -> {
                         OutlinedTextField(
                             value = s.privateKey,
                             onValueChange = { v -> viewModel.update { it.copy(privateKey = v) } },
-                            label = { Text(stringResource(R.string.auth_ssh_key)) },
+                            label = { Text(stringResource(if (tab == 4) R.string.gpg_secret_key else R.string.auth_ssh_key)) },
                             textStyle = CodeTextStyle,
                             minLines = 5,
                             maxLines = 10,
@@ -345,6 +406,7 @@ fun AddCredentialScreen(onBack: () -> Unit, onSaved: (Long) -> Unit, viewModel: 
                 val enabled = !s.busy && when (tab) {
                     0 -> s.token.isNotBlank() && s.username.isNotBlank()
                     1 -> true
+                    3 -> s.gpgName.isNotBlank() && s.gpgEmail.contains('@')
                     else -> s.privateKey.isNotBlank()
                 }
                 GradientButton(
@@ -352,6 +414,8 @@ fun AddCredentialScreen(onBack: () -> Unit, onSaved: (Long) -> Unit, viewModel: 
                         when {
                             tab == 1 && s.busy -> R.string.ssh_generating
                             tab == 1 -> R.string.ssh_generate
+                            tab == 3 && s.busy -> R.string.gpg_generating
+                            tab == 3 -> R.string.gpg_generate
                             else -> R.string.action_save
                         },
                     ),
@@ -359,7 +423,9 @@ fun AddCredentialScreen(onBack: () -> Unit, onSaved: (Long) -> Unit, viewModel: 
                         when (tab) {
                             0 -> viewModel.saveHttps()
                             1 -> viewModel.generateSsh()
-                            else -> viewModel.importSsh()
+                            2 -> viewModel.importSsh()
+                            3 -> viewModel.generateGpg()
+                            else -> viewModel.importGpg()
                         }
                     },
                     enabled = enabled,

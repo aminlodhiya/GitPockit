@@ -17,6 +17,10 @@ data class SyncSettings(
     val dailyTimes: List<Int> = emptyList(),
     /** Rebase local commits on top of the remote instead of creating merge commits. */
     val pullRebase: Boolean = false,
+    /** Download Git LFS files automatically when pulling. */
+    val lfsDownload: Boolean = true,
+    /** Bring submodules to the commits the repository expects after pulling. */
+    val updateSubmodules: Boolean = true,
 )
 
 enum class SyncTrigger { MANUAL, SCHEDULE, FILE_CHANGE, APP_OPEN, APP_CLOSE, TILE, WIDGET, INTENT, RETRY }
