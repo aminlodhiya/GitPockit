@@ -15,9 +15,19 @@ android {
         applicationId = "dev.gitpockit"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // GitHub OAuth App client id for "Sign in with GitHub" (public, not a secret). From the
+        // GITPOCKIT_GITHUB_CLIENT_ID environment variable or gitpockit.githubClientId in
+        // local.properties. Empty = only personal-access-token sign-in is offered.
+        val localProps = Properties().apply {
+            rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
+        }
+        val githubClientId = System.getenv("GITPOCKIT_GITHUB_CLIENT_ID")?.takeIf { it.isNotBlank() }
+            ?: localProps.getProperty("gitpockit.githubClientId", "")
+        buildConfigField("String", "GITHUB_CLIENT_ID", "\"$githubClientId\"")
     }
 
     // Two editions from the same code. Same application id, so switching is a normal update.
@@ -109,6 +119,8 @@ dependencies {
     implementation(project(":core:security"))
     implementation(project(":sync"))
     implementation(project(":core:files"))
+    implementation(project(":core:github"))
+    implementation(libs.ktor.client.okhttp)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

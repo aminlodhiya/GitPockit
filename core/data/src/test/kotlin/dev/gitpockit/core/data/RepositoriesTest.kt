@@ -100,6 +100,19 @@ class RepositoriesTest {
         assertTrue(bad is GitException)
     }
 
+    @Test fun gitHubAccountsAreHttpsCredentialsAndReplacedOnResignIn() = runTest {
+        val first = creds.addGitHubAccount("octo", "gho_old")
+        val second = creds.addGitHubAccount("OCTO", "gho_new")
+        val all = creds.credentials.first()
+        assertEquals(1, all.size)
+        assertTrue(all.single().isGitHubAccount)
+        assertEquals("GitHub: OCTO", all.single().label)
+        assertEquals(null, db.credentialDao().get(first))
+        assertEquals("gho_new", creds.token(second))
+        assertEquals(GitCredentials.UserPassword("OCTO", "gho_new"), creds.resolve(second))
+        assertEquals(null, creds.token(creds.generateSsh("k", SshKeys.Type.ED25519).id))
+    }
+
     @Test fun registerListMoveAndRemoveRepos() = runTest {
         val dir = tmp.newFolder("notes")
         engine.init(dir).close()

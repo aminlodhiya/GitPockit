@@ -133,6 +133,8 @@ fun SettingsScreen(onBack: () -> Unit, onCredentials: () -> Unit, viewModel: Set
 
             author?.let { a -> AuthorCard(a, viewModel::setAuthor) }
 
+            dev.gitpockit.ui.github.GitHubAccountCard()
+
             BackgroundSyncCard(viewModel)
 
             val storage = rememberStorageAccess()

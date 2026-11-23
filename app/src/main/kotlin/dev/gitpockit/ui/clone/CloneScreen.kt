@@ -88,6 +88,7 @@ data class CloneUiState(
 
 @HiltViewModel
 class CloneViewModel @Inject constructor(
+    savedState: androidx.lifecycle.SavedStateHandle,
     private val engine: GitEngine,
     private val repos: RepoRepository,
     private val credentialRepo: CredentialRepository,
@@ -99,6 +100,12 @@ class CloneViewModel @Inject constructor(
         credentialRepo.credentials.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     private var job: Job? = null
     private var parentPicked = false
+
+    init {
+        // Opened from "Clone from GitHub": URL and account are filled in.
+        savedState.get<String>("url")?.takeIf { it.isNotBlank() }?.let { url -> update { it.copy(url = url) } }
+        savedState.get<Long>("credentialId")?.takeIf { it >= 0 }?.let { id -> _state.update { it.copy(credentialId = id) } }
+    }
 
     fun update(transform: (CloneUiState) -> CloneUiState) = _state.update { old ->
         val new = transform(old).copy(error = null)

@@ -4,7 +4,7 @@
 
 GitPockit is a free, open-source Git client for Android. Keep any folder on your phone — notes, an Obsidian vault, dotfiles, docs, code — in sync with a Git repository, and use the full power of Git from your phone.
 
-> Status: **v1.0.0, first release**. Core Git, automatic background sync, advanced Git operations, history tools, file editing, signed commits, submodules and Git LFS. GitHub/GitLab/Gitea integration is next.
+> Status: **v1.1.0**. Core Git, automatic background sync, advanced Git operations, history tools, file editing, signed commits, submodules, Git LFS, and GitHub integration.
 
 ## Features
 
@@ -21,6 +21,7 @@ GitPockit is a free, open-source Git client for Android. Keep any folder on your
 - **Signed commits**: SSH signing with your SSH key, or OpenPGP (generate or import a GPG key); merges, rebases, cherry-picks and annotated tags are signed too, and commits show whether they're signed by your key
 - **Submodules**: clone with submodules, update, add, open a submodule as its own repository, optional update after pull
 - **Git LFS**: large files are downloaded on clone/pull and uploaded before push (HTTPS token or SSH `git-lfs-authenticate`); not-yet-downloaded files stay as clean placeholders; track file types from the app
+- **GitHub**: sign in (device code or token), clone from your repo list, issues (search, create, comment, close), pull requests (conversation, changed files, CI status, merge/squash/rebase, create from a branch), Actions runs (jobs, steps, re-run); viewed items stay readable offline and offline comments are sent later
 - **Markdown preview**, **image viewer** (zoom; SVG and animated GIF), editors for `.gitignore` and `.git/info/exclude`
 - Branches: create, switch (including remote branches), rename, delete, **merge** and **rebase**
 - **Stash** (save with message, include new files, apply, pop, drop), **tags** (lightweight/annotated, push, delete locally or on the remote, check out)
@@ -37,7 +38,7 @@ GitPockit is a free, open-source Git client for Android. Keep any folder on your
 - Premium dark theme (default), simple light theme, AMOLED black, optional Material You colors
 
 **On the roadmap**
-- GitHub / GitLab / Gitea sign-in, issues, pull requests and CI runs
+- GitLab and Gitea integration
 - Biometric lock, backup/restore
 - Opt-in AI helpers with your own API key (hidden by default)
 
@@ -73,6 +74,7 @@ Requirements: JDK 17+, Android SDK (platform 36, build-tools 36).
 | `core/data` | Room database (repos, containers, credentials), repositories, storage helpers |
 | `core/security` | Android Keystore AES-GCM encryption for secrets |
 | `core/files` | Safe file operations confined to a repository (explorer/editor backend) |
+| `core/github` | GitHub REST API client and OAuth device-flow sign-in (Ktor) |
 | `sync` | Sync engine (commit → pull → resolve → push), per-repo operation lock |
 
 The app talks only to the `GitEngine` interface, so the Git backend can be swapped without touching features.

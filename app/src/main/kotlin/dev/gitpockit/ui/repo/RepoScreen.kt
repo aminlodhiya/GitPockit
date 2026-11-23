@@ -121,8 +121,13 @@ class RepoViewModel @javax.inject.Inject constructor(
     ops: RepoOps,
     repos: RepoRepository,
     private val coordinator: SyncCoordinator,
+    private val github: dev.gitpockit.github.GitHubService,
     @ApplicationContext private val context: Context,
 ) : RepoScopedViewModel(savedState, ops) {
+    /** owner/name when the sync remote is on github.com (shows the GitHub tab). */
+    private val _githubSlug = MutableStateFlow<dev.gitpockit.core.github.RepoSlug?>(null)
+    val githubSlug: StateFlow<dev.gitpockit.core.github.RepoSlug?> = _githubSlug
+
     private val _state = MutableStateFlow(RepoHeaderState())
     val state: StateFlow<RepoHeaderState> = _state
     val repo: StateFlow<Repo?> = repos.observe(repoId).stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -133,6 +138,7 @@ class RepoViewModel @javax.inject.Inject constructor(
     init { refresh() }
 
     override fun refresh() {
+        viewModelScope.launch { runCatching { _githubSlug.value = github.slugFor(ops.repo(repoId)) } }
         viewModelScope.launch {
             runCatching {
                 ops.read(repoId) { _, git ->
@@ -201,8 +207,14 @@ fun RepoScreen(
     onFileHistory: (String) -> Unit,
     onOpenSubmodules: () -> Unit,
     onOpenLfs: () -> Unit,
+    onOpenIssue: (Int) -> Unit,
+    onOpenPull: (Int) -> Unit,
+    onOpenRun: (Long) -> Unit,
+    onNewIssue: () -> Unit,
+    onNewPull: () -> Unit,
     viewModel: RepoViewModel = hiltViewModel(),
 ) {
+    val githubSlug by viewModel.githubSlug.collectAsStateWithLifecycle()
     val s by viewModel.state.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val repo by viewModel.repo.collectAsStateWithLifecycle()
@@ -215,7 +227,8 @@ fun RepoScreen(
         onPauseOrDispose { }
     }
     val ext = GitPockitTheme.extendedColors
-    val tabs = listOf(R.string.tab_changes, R.string.tab_files, R.string.tab_history, R.string.tab_branches, R.string.tab_remotes)
+    val tabs = listOf(R.string.tab_changes, R.string.tab_files, R.string.tab_history, R.string.tab_branches, R.string.tab_remotes) +
+        if (githubSlug != null) listOf(R.string.github) else emptyList()
     val pager = rememberPagerState { tabs.size }
     var menu by remember { mutableStateOf(false) }
 
@@ -344,7 +357,14 @@ fun RepoScreen(
                 )
                 2 -> HistoryTab(onOpenCommit = onOpenCommit, showMessage = showMessage)
                 3 -> BranchesTab(showMessage = showMessage, onOpenConflicts = onOpenConflicts, onCompare = onCompare)
-                else -> RemotesTab(showMessage = showMessage)
+                4 -> RemotesTab(showMessage = showMessage)
+                else -> dev.gitpockit.ui.github.GitHubTab(
+                    onOpenIssue = onOpenIssue,
+                    onOpenPull = onOpenPull,
+                    onOpenRun = onOpenRun,
+                    onNewIssue = onNewIssue,
+                    onNewPull = onNewPull,
+                )
             }
         }
     }

@@ -31,7 +31,7 @@ jobs:
           echo "VERSION=$NAME" >> "$GITHUB_ENV"
 
       - name: Unit tests
-        run: ./gradlew :core:git:test :core:files:test :core:data:testDebugUnitTest :sync:testDebugUnitTest --console=plain
+        run: ./gradlew :core:git:test :core:files:test :core:github:test :core:data:testDebugUnitTest :sync:testDebugUnitTest --console=plain
 
       - name: Restore the signing key
         env:
@@ -49,6 +49,8 @@ jobs:
           GITPOCKIT_KEYSTORE_PASSWORD: ${{ secrets.GITPOCKIT_KEYSTORE_PASSWORD }}
           GITPOCKIT_KEY_ALIAS: ${{ secrets.GITPOCKIT_KEY_ALIAS }}
           GITPOCKIT_KEY_PASSWORD: ${{ secrets.GITPOCKIT_KEY_PASSWORD }}
+          # Public OAuth App client id for "Sign in with GitHub" (optional; see RELEASING.md).
+          GITPOCKIT_GITHUB_CLIENT_ID: ${{ secrets.GITPOCKIT_GITHUB_CLIENT_ID }}
         run: ./gradlew :app:assembleStandardRelease :app:assembleFullRelease --console=plain
 
       - name: Verify signatures and collect files

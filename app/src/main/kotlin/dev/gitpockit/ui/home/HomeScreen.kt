@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.FolderCopy
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -160,6 +161,7 @@ class HomeViewModel @Inject constructor(
 @Composable
 fun HomeScreen(
     onClone: () -> Unit,
+    onCloneFromGitHub: () -> Unit,
     onAddExisting: () -> Unit,
     onCreate: () -> Unit,
     onSettings: () -> Unit,
@@ -261,6 +263,7 @@ fun HomeScreen(
     if (showAddSheet) {
         AddRepoSheet(
             onDismiss = { showAddSheet = false },
+            onCloneFromGitHub = { showAddSheet = false; onCloneFromGitHub() },
             onClone = { showAddSheet = false; onClone() },
             onAddExisting = { showAddSheet = false; onAddExisting() },
             onCreate = { showAddSheet = false; onCreate() },
@@ -401,9 +404,10 @@ private fun RepoCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddRepoSheet(onDismiss: () -> Unit, onClone: () -> Unit, onAddExisting: () -> Unit, onCreate: () -> Unit) {
+private fun AddRepoSheet(onDismiss: () -> Unit, onCloneFromGitHub: () -> Unit, onClone: () -> Unit, onAddExisting: () -> Unit, onCreate: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
         Column(Modifier.navigationBarsPadding().padding(bottom = 16.dp)) {
+            SheetOption(Icons.Default.Hub, R.string.gh_clone_from, R.string.gh_clone_from_desc, onCloneFromGitHub)
             SheetOption(Icons.Default.CloudDownload, R.string.add_clone, R.string.add_clone_desc, onClone)
             SheetOption(Icons.Default.FolderOpen, R.string.add_existing, R.string.add_existing_desc, onAddExisting)
             SheetOption(Icons.Default.CreateNewFolder, R.string.add_create, R.string.add_create_desc, onCreate)

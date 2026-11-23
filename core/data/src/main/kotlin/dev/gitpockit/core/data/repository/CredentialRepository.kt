@@ -24,6 +24,33 @@ class CredentialRepository(
 ) {
     val credentials: Flow<List<Credential>> = dao.observeAll().map { list -> list.map { it.toModel() } }
 
+    /**
+     * Saves a GitHub account (OAuth or personal access token). It's an HTTPS credential too, so the
+     * same token clones and pushes. Signing in again as the same user replaces the old token.
+     */
+    suspend fun addGitHubAccount(login: String, token: String): Long {
+        dao.all().filter { it.provider == Credential.PROVIDER_GITHUB && it.username.equals(login, ignoreCase = true) }
+            .forEach { dao.delete(it.id) }
+        val secret = withContext(Dispatchers.Default) { cipher.encrypt(token.toByteArray()) }
+        return dao.insert(
+            CredentialEntity(
+                label = "GitHub: $login",
+                type = CredentialType.HTTPS.name,
+                username = login,
+                secret = secret,
+                createdAt = clock(),
+                provider = Credential.PROVIDER_GITHUB,
+            ),
+        )
+    }
+
+    /** API token of a credential: GitHub accounts and HTTPS tokens qualify. */
+    suspend fun token(id: Long): String? {
+        val entity = dao.get(id) ?: return null
+        if (entity.type != CredentialType.HTTPS.name) return null
+        return withContext(Dispatchers.Default) { runCatching { String(cipher.decrypt(entity.secret)) }.getOrNull() }
+    }
+
     suspend fun addHttps(label: String, username: String, token: String): Long {
         require(token.isNotBlank()) { "Token must not be empty" }
         val secret = withContext(Dispatchers.Default) { cipher.encrypt(token.toByteArray()) }
@@ -159,5 +186,6 @@ class CredentialRepository(
         username = username,
         publicKey = publicKey,
         fingerprint = fingerprint,
+        provider = provider,
     )
 }

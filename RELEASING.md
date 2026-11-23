@@ -25,6 +25,19 @@ Add these **repository secrets** (GitHub → Settings → Secrets and variables 
 | `GITPOCKIT_KEY_ALIAS` | the key alias (`gitpockit`) |
 | `GITPOCKIT_KEY_PASSWORD` | the key password |
 
+### Optional: one-tap "Sign in with GitHub"
+
+The app signs in to GitHub with the OAuth **device flow**, which needs only a public client id (no secret):
+
+1. github.com → Settings → Developer settings → **OAuth Apps → New OAuth App**
+   - Application name: `GitPockit` · Homepage URL: your repository URL
+   - Authorization callback URL: your repository URL (not used by the device flow, but required)
+2. After creating it, tick **Enable Device Flow** and save.
+3. Copy the **Client ID** and add it as the repository secret `GITPOCKIT_GITHUB_CLIENT_ID`.
+   For local builds, add `gitpockit.githubClientId=<client id>` to `local.properties`.
+
+Without it, the app still works with GitHub, using a personal access token to sign in.
+
 For local signed builds, put the same values in a `keystore.properties` file in the project root
 (it's git-ignored):
 

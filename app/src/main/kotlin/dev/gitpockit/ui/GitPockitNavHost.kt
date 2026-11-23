@@ -38,7 +38,13 @@ import dev.gitpockit.ui.settings.SettingsScreen
 
 object Routes {
     const val HOME = "home"
-    const val CLONE = "clone"
+    const val CLONE = "clone?url={url}&credentialId={credentialId}"
+    const val GH_REPOS = "github/repos"
+    const val GH_ISSUE = "repo/{repoId}/gh/issue/{number}"
+    const val GH_NEW_ISSUE = "repo/{repoId}/gh/new-issue"
+    const val GH_PULL = "repo/{repoId}/gh/pull/{number}"
+    const val GH_NEW_PULL = "repo/{repoId}/gh/new-pull"
+    const val GH_RUN = "repo/{repoId}/gh/run/{runId}"
     const val ADD_REPO = "add?create={create}"
     const val SETTINGS = "settings"
     const val CREDENTIALS = "credentials"
@@ -61,6 +67,12 @@ object Routes {
     const val TAGS = "repo/{repoId}/tags"
     const val REFLOG = "repo/{repoId}/reflog"
 
+    fun clone(url: String? = null, credentialId: Long? = null) = "clone?url=${Uri.encode(url.orEmpty())}&credentialId=${credentialId ?: -1}"
+    fun ghIssue(id: Long, n: Int) = "repo/$id/gh/issue/$n"
+    fun ghNewIssue(id: Long) = "repo/$id/gh/new-issue"
+    fun ghPull(id: Long, n: Int) = "repo/$id/gh/pull/$n"
+    fun ghNewPull(id: Long) = "repo/$id/gh/new-pull"
+    fun ghRun(id: Long, runId: Long) = "repo/$id/gh/run/$runId"
     fun addRepo(create: Boolean) = "add?create=$create"
     fun repo(id: Long) = "repo/$id"
     fun repoSettings(id: Long) = "repo/$id/settings"
@@ -112,14 +124,27 @@ fun GitPockitNavHost(deepLink: DeepLink? = null, onDeepLinkHandled: () -> Unit =
     NavHost(navController = nav, startDestination = Routes.HOME) {
         composable(Routes.HOME) {
             HomeScreen(
-                onClone = { nav.navigate(Routes.CLONE) },
+                onClone = { nav.navigate(Routes.clone()) },
+                onCloneFromGitHub = { nav.navigate(Routes.GH_REPOS) },
                 onAddExisting = { nav.navigate(Routes.addRepo(create = false)) },
                 onCreate = { nav.navigate(Routes.addRepo(create = true)) },
                 onSettings = { nav.navigate(Routes.SETTINGS) },
                 onOpenRepo = { nav.navigate(Routes.repo(it)) },
             )
         }
-        composable(Routes.CLONE) { entry ->
+        composable(Routes.GH_REPOS) {
+            dev.gitpockit.ui.github.GitHubReposScreen(
+                onBack = { nav.popBackStack() },
+                onPick = { url, cred -> nav.navigate(Routes.clone(url, cred)) },
+            )
+        }
+        composable(
+            Routes.CLONE,
+            arguments = listOf(
+                navArgument("url") { type = NavType.StringType; defaultValue = "" },
+                navArgument("credentialId") { type = NavType.LongType; defaultValue = -1L },
+            ),
+        ) { entry ->
             CloneScreen(
                 onBack = { nav.popBackStack() },
                 onCloned = { id -> nav.navigate(Routes.repo(id)) { popUpTo(Routes.HOME) } },
@@ -168,6 +193,11 @@ fun GitPockitNavHost(deepLink: DeepLink? = null, onDeepLinkHandled: () -> Unit =
                 onFileHistory = { nav.navigate(Routes.fileHistory(id, it)) },
                 onOpenSubmodules = { nav.navigate(Routes.submodules(id)) },
                 onOpenLfs = { nav.navigate(Routes.lfs(id)) },
+                onOpenIssue = { nav.navigate(Routes.ghIssue(id, it)) },
+                onOpenPull = { nav.navigate(Routes.ghPull(id, it)) },
+                onOpenRun = { nav.navigate(Routes.ghRun(id, it)) },
+                onNewIssue = { nav.navigate(Routes.ghNewIssue(id)) },
+                onNewPull = { nav.navigate(Routes.ghNewPull(id)) },
             )
         }
         composable(Routes.REPO_SETTINGS, arguments = listOf(repoIdArg)) { entry ->
@@ -227,6 +257,29 @@ fun GitPockitNavHost(deepLink: DeepLink? = null, onDeepLinkHandled: () -> Unit =
                 onFileHistory = { nav.navigate(Routes.fileHistory(id, it)) },
                 onBlame = { nav.navigate(Routes.blame(id, it)) },
             )
+        }
+        composable(Routes.GH_ISSUE, arguments = listOf(repoIdArg, navArgument("number") { type = NavType.IntType })) {
+            dev.gitpockit.ui.github.IssueScreen(onBack = { nav.popBackStack() })
+        }
+        composable(Routes.GH_NEW_ISSUE, arguments = listOf(repoIdArg)) { entry ->
+            val id = checkNotNull(entry.arguments?.getLong("repoId"))
+            dev.gitpockit.ui.github.NewIssueScreen(
+                onBack = { nav.popBackStack() },
+                onCreated = { n -> nav.navigate(Routes.ghIssue(id, n)) { popUpTo(Routes.GH_NEW_ISSUE) { inclusive = true } } },
+            )
+        }
+        composable(Routes.GH_PULL, arguments = listOf(repoIdArg, navArgument("number") { type = NavType.IntType })) {
+            dev.gitpockit.ui.github.PullScreen(onBack = { nav.popBackStack() })
+        }
+        composable(Routes.GH_NEW_PULL, arguments = listOf(repoIdArg)) { entry ->
+            val id = checkNotNull(entry.arguments?.getLong("repoId"))
+            dev.gitpockit.ui.github.NewPullScreen(
+                onBack = { nav.popBackStack() },
+                onCreated = { n -> nav.navigate(Routes.ghPull(id, n)) { popUpTo(Routes.GH_NEW_PULL) { inclusive = true } } },
+            )
+        }
+        composable(Routes.GH_RUN, arguments = listOf(repoIdArg, navArgument("runId") { type = NavType.LongType })) {
+            dev.gitpockit.ui.github.RunScreen(onBack = { nav.popBackStack() })
         }
         composable(Routes.SUBMODULES, arguments = listOf(repoIdArg)) {
             SubmodulesScreen(onBack = { nav.popBackStack() }, onOpenRepo = { nav.navigate(Routes.repo(it)) })

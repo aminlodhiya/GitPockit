@@ -10,7 +10,11 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import dev.gitpockit.background.AndroidNetworkStatus
+import dev.gitpockit.core.data.db.GitHubCacheDao
 import dev.gitpockit.core.data.db.GitPockitDatabase
+import dev.gitpockit.core.data.db.PendingCommentDao
+import io.ktor.client.engine.HttpClientEngine
+import io.ktor.client.engine.okhttp.OkHttp
 import dev.gitpockit.core.data.repository.CredentialRepository
 import dev.gitpockit.core.data.repository.RepoRepository
 import dev.gitpockit.core.data.storage.StorageLocations
@@ -70,6 +74,16 @@ object AppModule {
         network: NetworkStatus,
         settings: SettingsRepository,
     ): SyncEngine = SyncEngine(ops, repos, network, deviceName = { settings.deviceName.first() })
+
+    /** One HTTP engine (OkHttp) shared by all GitHub API clients. */
+    @Provides @Singleton
+    fun provideHttpEngine(): HttpClientEngine = OkHttp.create()
+
+    @Provides
+    fun provideGitHubCacheDao(db: GitPockitDatabase): GitHubCacheDao = db.gitHubCacheDao()
+
+    @Provides
+    fun providePendingCommentDao(db: GitPockitDatabase): PendingCommentDao = db.pendingCommentDao()
 
     @Provides @Singleton
     fun provideStorageLocations(@ApplicationContext context: Context): StorageLocations = StorageLocations(context)

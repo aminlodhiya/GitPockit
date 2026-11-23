@@ -19,7 +19,15 @@ data class Credential(
     val username: String,
     val publicKey: String?,
     val fingerprint: String?,
-)
+    /** "github" for a GitHub account sign-in. */
+    val provider: String? = null,
+) {
+    val isGitHubAccount: Boolean get() = provider == PROVIDER_GITHUB
+
+    companion object {
+        const val PROVIDER_GITHUB = "github"
+    }
+}
 
 data class Repo(
     val id: Long,

@@ -118,3 +118,33 @@ interface CredentialDao {
     @Query("DELETE FROM credentials WHERE id = :id")
     suspend fun delete(id: Long)
 }
+
+@Dao
+interface GitHubCacheDao {
+    @Query("SELECT * FROM github_cache WHERE `key` = :key")
+    suspend fun get(key: String): GitHubCacheEntity?
+
+    @Upsert
+    suspend fun put(entry: GitHubCacheEntity)
+
+    @Query("DELETE FROM github_cache")
+    suspend fun clear()
+}
+
+@Dao
+interface PendingCommentDao {
+    @Query("SELECT * FROM github_pending_comments ORDER BY createdAt")
+    suspend fun all(): List<PendingCommentEntity>
+
+    @Query("SELECT * FROM github_pending_comments WHERE owner = :owner AND repo = :repo AND number = :number ORDER BY createdAt")
+    fun observe(owner: String, repo: String, number: Int): Flow<List<PendingCommentEntity>>
+
+    @Insert
+    suspend fun insert(comment: PendingCommentEntity): Long
+
+    @Query("DELETE FROM github_pending_comments WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("UPDATE github_pending_comments SET attempts = attempts + 1, lastError = :error WHERE id = :id")
+    suspend fun failed(id: Long, error: String?)
+}

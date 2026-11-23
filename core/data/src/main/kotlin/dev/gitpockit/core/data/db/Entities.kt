@@ -27,6 +27,8 @@ data class CredentialEntity(
     val publicKey: String? = null,
     val fingerprint: String? = null,
     val createdAt: Long,
+    /** "github" for a signed-in GitHub account (its token also works for Git over HTTPS) (v7). */
+    val provider: String? = null,
 )
 
 @Entity(
@@ -117,4 +119,26 @@ data class AppTriggerEntity(
     val repoId: Long,
     val onOpen: Boolean,
     val onClose: Boolean,
+)
+
+/** Last GitHub API response per screen, so issues/PRs/runs stay readable offline (v7). */
+@Entity(tableName = "github_cache")
+data class GitHubCacheEntity(
+    @PrimaryKey val key: String,
+    val json: String,
+    val fetchedAt: Long,
+)
+
+/** A comment written while offline, sent when the network is back (v7). */
+@Entity(tableName = "github_pending_comments")
+data class PendingCommentEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val credentialId: Long,
+    val owner: String,
+    val repo: String,
+    val number: Int,
+    val body: String,
+    val createdAt: Long,
+    @ColumnInfo(defaultValue = "0") val attempts: Int = 0,
+    val lastError: String? = null,
 )
