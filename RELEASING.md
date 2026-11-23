@@ -39,7 +39,7 @@ Without a key, `assemble*Release` still works but produces unsigned APKs.
 
 ## Making a release
 
-1. Bump `versionCode` and `versionName` in `app/build.gradle.kts` and commit.
-2. Tag and push: `git tag v0.7.0 && git push origin v0.7.0`
+1. Bump `versionCode` (always +1) and `versionName` (e.g. 1.0.1 for fixes, 1.1.0 for features) in `app/build.gradle.kts` and commit.
+2. Tag and push: `git tag -a v1.0.1 -m "GitPockit 1.0.1" && git push origin v1.0.1`
 3. The workflow checks the tag matches `versionName`, runs the tests, builds and verifies both
    signed APKs, and publishes them with a `SHA256SUMS.txt` on the GitHub Releases page.

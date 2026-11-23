@@ -4,7 +4,7 @@
 
 GitPockit is a free, open-source Git client for Android. Keep any folder on your phone — notes, an Obsidian vault, dotfiles, docs, code — in sync with a Git repository, and use the full power of Git from your phone.
 
-> Status: **early development (v0.7, Phase 3)**. Core Git, automatic background sync, advanced Git operations, history tools, file editing, signed commits, submodules and Git LFS work. Expect breaking changes.
+> Status: **v1.0.0, first release**. Core Git, automatic background sync, advanced Git operations, history tools, file editing, signed commits, submodules and Git LFS. GitHub/GitLab/Gitea integration is next.
 
 ## Features
 
