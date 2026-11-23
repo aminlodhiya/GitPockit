@@ -42,6 +42,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.gitpockit.BuildConfig
 import dev.gitpockit.R
 import dev.gitpockit.core.data.model.AppTrigger
 import dev.gitpockit.core.data.model.Container
@@ -150,7 +151,14 @@ fun RepoSettingsScreen(
             }
 
             SyncSettingsCard(r.sync, viewModel::setSync, onOpenLog)
-            AppTriggersCard(triggers, r.id, viewModel::setAppTrigger, viewModel::removeAppTrigger)
+            if (BuildConfig.APP_TRIGGERS) {
+                AppTriggersCard(triggers, r.id, viewModel::setAppTrigger, viewModel::removeAppTrigger)
+            } else {
+                GpCard(Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.app_triggers), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.app_triggers_full_only), style = MaterialTheme.typography.bodySmall, color = ext.textSecondary, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
 
             GpCard(Modifier.fillMaxWidth()) {
                 CredentialPicker(credentials, r.credentialId, viewModel::setCredential, onAddCredential, Modifier.fillMaxWidth())

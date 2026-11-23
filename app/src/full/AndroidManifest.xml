@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GitPockit Full only: "sync when an app opens or closes". Accessibility services are blocked by
+  Google Play Protect for apps installed from a browser/file manager in some countries, so the
+  Standard edition doesn't include this service.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- List launchable apps for the app-trigger picker. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <application>
+        <service
+            android:name=".background.AppTriggerService"
+            android:exported="false"
+            android:label="@string/accessibility_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_app_triggers" />
+        </service>
+    </application>
+</manifest>

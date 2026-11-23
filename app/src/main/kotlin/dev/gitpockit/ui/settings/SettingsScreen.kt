@@ -152,6 +152,11 @@ fun SettingsScreen(onBack: () -> Unit, onCredentials: () -> Unit, viewModel: Set
                 Text(stringResource(R.string.tagline), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
                 Text(stringResource(R.string.settings_license), style = MaterialTheme.typography.bodySmall, color = ext.textSecondary)
                 Text(
+                    stringResource(if (BuildConfig.APP_TRIGGERS) R.string.edition_full else R.string.edition_standard),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = ext.textSecondary,
+                )
+                Text(
                     stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
                     style = MaterialTheme.typography.bodySmall,
                     color = ext.textSecondary,
@@ -203,12 +208,14 @@ private fun BackgroundSyncCard(viewModel: SettingsViewModel) {
             }
         }
         ToggleRow(R.string.settings_notify_success, R.string.settings_notify_success_desc, notifySuccess, viewModel::setNotifyOnSuccess)
-        LinkRow(
-            Icons.Default.Accessibility,
-            R.string.settings_accessibility,
-            stringResource(if (accessibilityOn) R.string.settings_accessibility_on else R.string.settings_accessibility_off),
-            onClick = { SystemSettings.openAccessibilitySettings(context) },
-        )
+        if (BuildConfig.APP_TRIGGERS) {
+            LinkRow(
+                Icons.Default.Accessibility,
+                R.string.settings_accessibility,
+                stringResource(if (accessibilityOn) R.string.settings_accessibility_on else R.string.settings_accessibility_off),
+                onClick = { SystemSettings.openAccessibilitySettings(context) },
+            )
+        }
         LinkRow(
             Icons.Default.BatteryChargingFull,
             R.string.settings_battery,

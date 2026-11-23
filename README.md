@@ -41,6 +41,16 @@ GitPockit is a free, open-source Git client for Android. Keep any folder on your
 - Biometric lock, backup/restore
 - Opt-in AI helpers with your own API key (hidden by default)
 
+## Download
+
+Get the latest signed APKs from the **Releases** page:
+
+- **Standard** (recommended): every feature except syncing when another app opens/closes. Installs normally.
+- **Full**: adds that trigger via an accessibility service. In some countries Google Play Protect blocks such apps
+  when installed from a browser or file manager; install with `adb install` or temporarily pause Play Protect.
+
+Both editions share one signing key and app id, so you can switch between them without losing data.
+
 ## Building
 
 Requirements: JDK 17+, Android SDK (platform 36, build-tools 36).
@@ -49,7 +59,8 @@ Requirements: JDK 17+, Android SDK (platform 36, build-tools 36).
 ./gradlew :core:git:test        # Git engine tests (pure JVM, no device needed)
 ./gradlew :core:data:testDebugUnitTest  # database, migration & credential tests (Robolectric)
 ./gradlew :sync:testDebugUnitTest       # sync engine tests against real Git repos
-./gradlew :app:assembleDebug    # app/build/outputs/apk/debug/
+./gradlew :app:assembleStandardDebug   # app/build/outputs/apk/standard/debug/
+./gradlew :app:assembleFullDebug       # app/build/outputs/apk/full/debug/
 ```
 
 ## Project layout
@@ -73,6 +84,8 @@ Kotlin · Jetpack Compose · Material 3 · Hilt · Coroutines/Flow · Room · Wo
 ## Contributing
 
 Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Releases: see [RELEASING.md](RELEASING.md).
 
 ## Third-party content
 

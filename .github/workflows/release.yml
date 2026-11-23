@@ -1,0 +1,77 @@
+name: Release
+
+# Push a tag like v0.7.0 (matching versionName in app/build.gradle.kts) to publish
+# signed Standard and Full APKs on GitHub Releases.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Check the tag matches the app version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          NAME=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          if [ "$TAG" != "$NAME" ]; then
+            echo "::error::Tag v$TAG doesn't match versionName $NAME in app/build.gradle.kts"
+            exit 1
+          fi
+          echo "VERSION=$NAME" >> "$GITHUB_ENV"
+
+      - name: Unit tests
+        run: ./gradlew :core:git:test :core:files:test :core:data:testDebugUnitTest :sync:testDebugUnitTest --console=plain
+
+      - name: Restore the signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.GITPOCKIT_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Secret GITPOCKIT_KEYSTORE_BASE64 is missing (see RELEASING.md)"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "GITPOCKIT_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - name: Build signed APKs
+        env:
+          GITPOCKIT_KEYSTORE_PASSWORD: ${{ secrets.GITPOCKIT_KEYSTORE_PASSWORD }}
+          GITPOCKIT_KEY_ALIAS: ${{ secrets.GITPOCKIT_KEY_ALIAS }}
+          GITPOCKIT_KEY_PASSWORD: ${{ secrets.GITPOCKIT_KEY_PASSWORD }}
+        run: ./gradlew :app:assembleStandardRelease :app:assembleFullRelease --console=plain
+
+      - name: Verify signatures and collect files
+        run: |
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          mkdir dist
+          for edition in standard full; do
+            apk="app/build/outputs/apk/$edition/release/app-$edition-release.apk"
+            test -f "$apk" || { echo "::error::$apk not found (was it signed?)"; exit 1; }
+            "$APKSIGNER" verify --print-certs "$apk"
+            cp "$apk" "dist/GitPockit-$VERSION-$edition.apk"
+          done
+          rm -f "$RUNNER_TEMP/release.jks"
+          (cd dist && sha256sum *.apk > SHA256SUMS.txt)
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: GitPockit ${{ env.VERSION }}
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            ## Which file do I download?
+            - **GitPockit-${{ env.VERSION }}-standard.apk**: recommended. Everything except syncing when another app opens/closes. Installs without Android's "app blocked" warning.
+            - **GitPockit-${{ env.VERSION }}-full.apk**: adds the app open/close trigger (accessibility service). In some countries Google Play Protect blocks it when installed from a browser or file manager; install with `adb install` or temporarily pause Play Protect.
+
+            Both are signed with the same key, so you can switch editions without losing your repositories.

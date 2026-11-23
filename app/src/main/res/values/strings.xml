@@ -532,4 +532,9 @@
     <string name="lfs_download_done">Downloaded %1$d file(s)</string>
     <string name="lfs_summary">%1$d large file(s), %2$d on this device</string>
     <string name="files_track_lfs">Track *.%1$s with LFS</string>
+
+    <!-- Editions -->
+    <string name="edition_standard">Standard edition</string>
+    <string name="edition_full">Full edition</string>
+    <string name="app_triggers_full_only">Syncing when another app opens or closes needs GitPockit Full, which includes an accessibility service. It\'s left out of this edition so the app installs without Android\'s sensitive-permission warning. Schedules, daily times and file-change sync work here.</string>
 </resources>
