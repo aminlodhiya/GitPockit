@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  "Open with another app" for files inside repositories. Repos can live anywhere on storage
+  (all-files access), so the whole external storage and the app's own folders are shared
+  read-only, one file at a time, only when the user taps "Open with".
+-->
+<paths>
+    <external-path name="storage" path="." />
+    <external-files-path name="app_external" path="." />
+    <files-path name="app_files" path="." />
+    <!-- SD cards and other volumes outside the primary external storage. -->
+    <root-path name="root" path="" />
+</paths>

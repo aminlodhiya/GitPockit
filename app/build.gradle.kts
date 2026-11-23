@@ -13,8 +13,8 @@ android {
         applicationId = "dev.gitpockit"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.5.0"
+        versionCode = 6
+        versionName = "0.6.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -67,6 +67,7 @@ dependencies {
     implementation(project(":core:data"))
     implementation(project(":core:security"))
     implementation(project(":sync"))
+    implementation(project(":core:files"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -86,6 +87,12 @@ dependencies {
     implementation(libs.work.runtime)
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
+    implementation(libs.sora.editor)
+    implementation(libs.sora.textmate)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.svg)
+    implementation(libs.coil.gif)
+    implementation(libs.markdown.m3)
 
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 

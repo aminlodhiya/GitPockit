@@ -13,3 +13,8 @@
 -dontwarn javax.management.**
 -dontwarn java.lang.management.**
 -dontwarn java.lang.ProcessHandle
+# TextMate (syntax highlighting): tm4e builds grammar/theme models from JSON/plist by reflection.
+# Keep it whole so highlighting can't silently break in shrunk release builds.
+-keep class org.eclipse.tm4e.** { *; }
+-keepattributes Signature, InnerClasses, EnclosingMethod
+-dontwarn org.eclipse.tm4e.**

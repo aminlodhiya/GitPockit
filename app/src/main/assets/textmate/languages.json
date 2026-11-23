@@ -1,0 +1,104 @@
+{
+  "languages": [
+    {
+      "name": "markdown",
+      "scopeName": "text.html.markdown",
+      "grammar": "textmate/markdown/markdown.tmLanguage.json"
+    },
+    {
+      "name": "json",
+      "scopeName": "source.json",
+      "grammar": "textmate/json/JSON.tmLanguage.json"
+    },
+    {
+      "name": "yaml",
+      "scopeName": "source.yaml",
+      "grammar": "textmate/yaml/yaml.tmLanguage.json"
+    },
+    {
+      "name": "javascript",
+      "scopeName": "source.js",
+      "grammar": "textmate/javascript/JavaScript.tmLanguage.json"
+    },
+    {
+      "name": "typescript",
+      "scopeName": "source.ts",
+      "grammar": "textmate/typescript/TypeScript.tmLanguage.json"
+    },
+    {
+      "name": "python",
+      "scopeName": "source.python",
+      "grammar": "textmate/python/MagicPython.tmLanguage.json"
+    },
+    {
+      "name": "java",
+      "scopeName": "source.java",
+      "grammar": "textmate/java/java.tmLanguage.json"
+    },
+    {
+      "name": "kotlin",
+      "scopeName": "source.kotlin",
+      "grammar": "textmate/kotlin/Kotlin.tmLanguage"
+    },
+    {
+      "name": "html",
+      "scopeName": "text.html.basic",
+      "grammar": "textmate/html/html.tmLanguage.json"
+    },
+    {
+      "name": "css",
+      "scopeName": "source.css",
+      "grammar": "textmate/css/css.tmLanguage.json"
+    },
+    {
+      "name": "xml",
+      "scopeName": "text.xml",
+      "grammar": "textmate/xml/xml.tmLanguage.json"
+    },
+    {
+      "name": "shell",
+      "scopeName": "source.shell",
+      "grammar": "textmate/shell/shell-unix-bash.tmLanguage.json"
+    },
+    {
+      "name": "c",
+      "scopeName": "source.c",
+      "grammar": "textmate/c/c.tmLanguage.json"
+    },
+    {
+      "name": "cpp",
+      "scopeName": "source.cpp",
+      "grammar": "textmate/cpp/cpp.tmLanguage.json"
+    },
+    {
+      "name": "go",
+      "scopeName": "source.go",
+      "grammar": "textmate/go/go.tmLanguage.json"
+    },
+    {
+      "name": "rust",
+      "scopeName": "source.rust",
+      "grammar": "textmate/rust/rust.tmLanguage.json"
+    },
+    {
+      "name": "sql",
+      "scopeName": "source.sql",
+      "grammar": "textmate/sql/sql.tmLanguage.json"
+    },
+    {
+      "name": "ini",
+      "scopeName": "source.ini",
+      "grammar": "textmate/ini/ini.tmLanguage.json"
+    },
+    {
+      "name": "diff",
+      "scopeName": "source.diff",
+      "grammar": "textmate/diff/diff.tmLanguage.json"
+    },
+    {
+      "name": "lua",
+      "scopeName": "source.lua",
+      "grammar": "textmate/lua/lua.tmLanguage.json"
+    }
+  ]
+}

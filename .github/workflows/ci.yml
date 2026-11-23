@@ -15,8 +15,8 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
-      - name: Unit tests (Git engine, data, sync engine)
-        run: ./gradlew :core:git:test :core:data:testDebugUnitTest :sync:testDebugUnitTest --console=plain
+      - name: Unit tests (Git engine, files, data, sync engine)
+        run: ./gradlew :core:git:test :core:files:test :core:data:testDebugUnitTest :sync:testDebugUnitTest --console=plain
       - name: Lint and build debug APK
         run: ./gradlew :app:lintDebug :app:assembleDebug --console=plain
       - name: Upload test and lint reports

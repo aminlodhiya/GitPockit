@@ -18,6 +18,8 @@ import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
@@ -29,7 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -66,7 +68,9 @@ import dev.gitpockit.core.designsystem.theme.GitPockitTheme
 import dev.gitpockit.background.SyncCoordinator
 import dev.gitpockit.core.data.model.SyncResult
 import dev.gitpockit.core.data.model.SyncTrigger
+import dev.gitpockit.core.files.RepoFiles
 import dev.gitpockit.core.git.GitOperation
+import dev.gitpockit.ui.files.FilesTab
 import dev.gitpockit.sync.RepoOps
 import dev.gitpockit.sync.SyncDirection
 import dev.gitpockit.ui.common.userMessage
@@ -190,6 +194,9 @@ fun RepoScreen(
     onOpenTags: () -> Unit,
     onOpenReflog: () -> Unit,
     onCompare: (from: String, to: String) -> Unit,
+    onOpenEditor: (String) -> Unit,
+    onOpenImage: (String) -> Unit,
+    onFileHistory: (String) -> Unit,
     viewModel: RepoViewModel = hiltViewModel(),
 ) {
     val s by viewModel.state.collectAsStateWithLifecycle()
@@ -204,7 +211,7 @@ fun RepoScreen(
         onPauseOrDispose { }
     }
     val ext = GitPockitTheme.extendedColors
-    val tabs = listOf(R.string.tab_changes, R.string.tab_history, R.string.tab_branches, R.string.tab_remotes)
+    val tabs = listOf(R.string.tab_changes, R.string.tab_files, R.string.tab_history, R.string.tab_branches, R.string.tab_remotes)
     val pager = rememberPagerState { tabs.size }
     var menu by remember { mutableStateOf(false) }
 
@@ -257,6 +264,16 @@ fun RepoScreen(
                                 onClick = { menu = false; onOpenTags() },
                             )
                             DropdownMenuItem(
+                                text = { Text(stringResource(R.string.menu_gitignore)) },
+                                leadingIcon = { Icon(Icons.Default.VisibilityOff, null) },
+                                onClick = { menu = false; onOpenEditor(".gitignore") },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.menu_exclude)) },
+                                leadingIcon = { Icon(Icons.Default.PhoneAndroid, null) },
+                                onClick = { menu = false; onOpenEditor(RepoFiles.EXCLUDE_FILE) },
+                            )
+                            DropdownMenuItem(
                                 text = { Text(stringResource(R.string.menu_reflog)) },
                                 leadingIcon = { Icon(Icons.Default.Restore, null) },
                                 onClick = { menu = false; onOpenReflog() },
@@ -289,7 +306,7 @@ fun RepoScreen(
                 } else if (repo?.pendingSync == true) {
                     StatusPill(stringResource(R.string.status_pending), ext.modified, Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
                 }
-                PrimaryTabRow(selectedTabIndex = pager.currentPage, containerColor = MaterialTheme.colorScheme.background) {
+                PrimaryScrollableTabRow(selectedTabIndex = pager.currentPage, containerColor = MaterialTheme.colorScheme.background, edgePadding = 8.dp) {
                     tabs.forEachIndexed { i, label ->
                         Tab(
                             selected = pager.currentPage == i,
@@ -304,8 +321,15 @@ fun RepoScreen(
         HorizontalPager(state = pager, modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()), beyondViewportPageCount = 1) { page ->
             when (page) {
                 0 -> ChangesTab(onOpenDiff = onOpenDiff, onOpenConflicts = onOpenConflicts, showMessage = showMessage)
-                1 -> HistoryTab(onOpenCommit = onOpenCommit, showMessage = showMessage)
-                2 -> BranchesTab(showMessage = showMessage, onOpenConflicts = onOpenConflicts, onCompare = onCompare)
+                1 -> FilesTab(
+                    active = pager.currentPage == 1,
+                    onOpenEditor = onOpenEditor,
+                    onOpenImage = onOpenImage,
+                    onFileHistory = onFileHistory,
+                    showMessage = showMessage,
+                )
+                2 -> HistoryTab(onOpenCommit = onOpenCommit, showMessage = showMessage)
+                3 -> BranchesTab(showMessage = showMessage, onOpenConflicts = onOpenConflicts, onCompare = onCompare)
                 else -> RemotesTab(showMessage = showMessage)
             }
         }

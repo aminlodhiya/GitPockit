@@ -4,7 +4,7 @@
 
 GitPockit is a free, open-source Git client for Android. Keep any folder on your phone — notes, an Obsidian vault, dotfiles, docs, code — in sync with a Git repository, and use the full power of Git from your phone.
 
-> Status: **early development (v0.5, Phase 3b)**. Core Git, automatic background sync, advanced Git operations and history tools work. Expect breaking changes.
+> Status: **early development (v0.6, Phase 3c-1)**. Core Git, automatic background sync, advanced Git operations, history tools and in-app file editing work. Expect breaking changes.
 
 ## Features
 
@@ -16,6 +16,9 @@ GitPockit is a free, open-source Git client for Android. Keep any folder on your
 - History with a **commit graph** (lanes, branch & tag labels, all-branches view), **search** by message/author/hash, commit details and per-file diffs
 - **File history** (follows renames), **blame**, **compare** two branches/commits
 - **Stage or unstage individual lines or hunks** from the diff view
+- **File explorer** with Git status badges: create, rename, delete, ignore (`.gitignore` or this device only), open with other apps
+- **Code editor** with syntax highlighting for ~40 file types, line numbers, find & replace, undo/redo, word wrap
+- **Markdown preview**, **image viewer** (zoom; SVG and animated GIF), editors for `.gitignore` and `.git/info/exclude`
 - Branches: create, switch (including remote branches), rename, delete, **merge** and **rebase**
 - **Stash** (save with message, include new files, apply, pop, drop), **tags** (lightweight/annotated, push, delete locally or on the remote, check out)
 - Commit actions: **cherry-pick**, **revert**, **reset** (soft / mixed / hard), check out a commit
@@ -32,7 +35,6 @@ GitPockit is a free, open-source Git client for Android. Keep any folder on your
 
 **On the roadmap**
 - Submodules, Git LFS
-- File explorer and code editor
 - GitHub / GitLab / Gitea sign-in, issues, pull requests and CI runs
 - Signed commits, biometric lock, backup/restore
 - Opt-in AI helpers with your own API key (hidden by default)
@@ -57,17 +59,24 @@ Requirements: JDK 17+, Android SDK (platform 36, build-tools 36).
 | `core/git` | `GitEngine` API and its JGit implementation (pure Kotlin/JVM) |
 | `core/data` | Room database (repos, containers, credentials), repositories, storage helpers |
 | `core/security` | Android Keystore AES-GCM encryption for secrets |
+| `core/files` | Safe file operations confined to a repository (explorer/editor backend) |
 | `sync` | Sync engine (commit → pull → resolve → push), per-repo operation lock |
 
 The app talks only to the `GitEngine` interface, so the Git backend can be swapped without touching features.
 
 ## Tech
 
-Kotlin · Jetpack Compose · Material 3 · Hilt · Coroutines/Flow · DataStore · [JGit](https://www.eclipse.org/jgit/) · [JSch (mwiede fork)](https://github.com/mwiede/jsch)
+Kotlin · Jetpack Compose · Material 3 · Hilt · Coroutines/Flow · Room · WorkManager · DataStore · sora-editor · Coil · [JGit](https://www.eclipse.org/jgit/) · [JSch (mwiede fork)](https://github.com/mwiede/jsch)
 
 ## Contributing
 
 Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Third-party content
+
+Syntax highlighting grammars come from [VS Code](https://github.com/microsoft/vscode) (MIT) and
+[sora-editor](https://github.com/Rosemoe/sora-editor); see `app/src/main/assets/textmate/NOTICE.md`.
+The editor is [sora-editor](https://github.com/Rosemoe/sora-editor) (LGPL-2.1).
 
 ## License
 

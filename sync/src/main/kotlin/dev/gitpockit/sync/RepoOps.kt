@@ -46,6 +46,11 @@ class RepoOps(
     /** Repos with a mutating operation (commit, pull, sync…) in progress. */
     val busy: StateFlow<Set<Long>> = _busy
 
+    /** Tells open screens that files changed outside a Git operation (e.g. saved in the editor). */
+    fun notifyChanged(id: Long) {
+        _changes.tryEmit(id)
+    }
+
     suspend fun repo(id: Long): Repo = repos.get(id) ?: throw GitException("Repository no longer exists")
 
     suspend fun credentialsFor(repo: Repo): GitCredentials = credentials.resolve(repo.credentialId)
