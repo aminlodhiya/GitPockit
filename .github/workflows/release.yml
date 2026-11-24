@@ -31,7 +31,7 @@ jobs:
           echo "VERSION=$NAME" >> "$GITHUB_ENV"
 
       - name: Unit tests
-        run: ./gradlew :core:git:test :core:files:test :core:github:test :core:data:testDebugUnitTest :sync:testDebugUnitTest --console=plain
+        run: ./gradlew :core:git:test :core:files:test :core:github:test :core:security:testDebugUnitTest :core:data:testDebugUnitTest :sync:testDebugUnitTest --console=plain
 
       - name: Restore the signing key
         env:

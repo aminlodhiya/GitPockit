@@ -4,7 +4,7 @@
 
 GitPockit is a free, open-source Git client for Android. Keep any folder on your phone — notes, an Obsidian vault, dotfiles, docs, code — in sync with a Git repository, and use the full power of Git from your phone.
 
-> Status: **v1.1.0**. Core Git, automatic background sync, advanced Git operations, history tools, file editing, signed commits, submodules, Git LFS, and GitHub integration.
+> Status: **v1.2.0**. Core Git, automatic background sync, advanced Git operations, history tools, file editing, signed commits, submodules, Git LFS, and GitHub integration.
 
 ## Features
 
@@ -22,6 +22,7 @@ GitPockit is a free, open-source Git client for Android. Keep any folder on your
 - **Submodules**: clone with submodules, update, add, open a submodule as its own repository, optional update after pull
 - **Git LFS**: large files are downloaded on clone/pull and uploaded before push (HTTPS token or SSH `git-lfs-authenticate`); not-yet-downloaded files stay as clean placeholders; track file types from the app
 - **GitHub**: sign in (device code or token), clone from your repo list, issues (search, create, comment, close), pull requests (conversation, changed files, CI status, merge/squash/rebase, create from a branch), Actions runs (jobs, steps, re-run); viewed items stay readable offline and offline comments are sent later
+- **App lock** (optional): fingerprint/face or the phone's PIN when opening the app, lock after 0–30 minutes in the background, hidden in recent apps
 - **Markdown preview**, **image viewer** (zoom; SVG and animated GIF), editors for `.gitignore` and `.git/info/exclude`
 - Branches: create, switch (including remote branches), rename, delete, **merge** and **rebase**
 - **Stash** (save with message, include new files, apply, pop, drop), **tags** (lightweight/annotated, push, delete locally or on the remote, check out)
@@ -39,7 +40,7 @@ GitPockit is a free, open-source Git client for Android. Keep any folder on your
 
 **On the roadmap**
 - GitLab and Gitea integration
-- Biometric lock, backup/restore
+- Backup/restore
 - Opt-in AI helpers with your own API key (hidden by default)
 
 ## Download

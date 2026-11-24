@@ -14,6 +14,7 @@ import javax.inject.Inject
 class GitPockitApp : Application(), Configuration.Provider {
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var backgroundSync: BackgroundSync
+    @Inject lateinit var appLock: dev.gitpockit.security.AppLock
 
     /** Lives as long as the process; used for keeping background sync in line with settings. */
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -24,5 +25,6 @@ class GitPockitApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         backgroundSync.start(appScope)
+        appLock.start(appScope)
     }
 }

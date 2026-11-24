@@ -38,6 +38,16 @@ class SettingsRepository @Inject constructor(
     /** Let automation apps (Tasker, Automate…) trigger syncs via broadcast intents. */
     val automationEnabled: Flow<Boolean> = store.data.map { it[AUTOMATION] ?: false }
 
+    /** Ask for fingerprint / phone PIN when opening the app. */
+    val appLockEnabled: Flow<Boolean> = store.data.map { it[APP_LOCK] ?: false }
+
+    /** Minutes in the background before locking again (0 = immediately). */
+    val appLockTimeoutMinutes: Flow<Int> = store.data.map { it[APP_LOCK_TIMEOUT] ?: 0 }
+
+    suspend fun setAppLockEnabled(enabled: Boolean) = store.edit { it[APP_LOCK] = enabled }
+
+    suspend fun setAppLockTimeoutMinutes(minutes: Int) = store.edit { it[APP_LOCK_TIMEOUT] = minutes }
+
     suspend fun setDeviceName(name: String) = store.edit { it[DEVICE_NAME] = name.trim() }
 
     suspend fun setNotifyOnSuccess(enabled: Boolean) = store.edit { it[NOTIFY_SUCCESS] = enabled }
@@ -64,6 +74,8 @@ class SettingsRepository @Inject constructor(
         val DEVICE_NAME = stringPreferencesKey("device_name")
         val NOTIFY_SUCCESS = booleanPreferencesKey("notify_success")
         val AUTOMATION = booleanPreferencesKey("automation_enabled")
+        val APP_LOCK = booleanPreferencesKey("app_lock")
+        val APP_LOCK_TIMEOUT = androidx.datastore.preferences.core.intPreferencesKey("app_lock_timeout_minutes")
 
         fun defaultDeviceName(): String =
             android.os.Build.MODEL.takeIf { it.isNotBlank() } ?: "Android"

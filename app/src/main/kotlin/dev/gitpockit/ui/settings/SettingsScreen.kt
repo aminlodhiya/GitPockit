@@ -135,6 +135,8 @@ fun SettingsScreen(onBack: () -> Unit, onCredentials: () -> Unit, viewModel: Set
 
             dev.gitpockit.ui.github.GitHubAccountCard()
 
+            dev.gitpockit.security.AppLockCard()
+
             BackgroundSyncCard(viewModel)
 
             val storage = rememberStorageAccess()

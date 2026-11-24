@@ -2,11 +2,13 @@ package dev.gitpockit
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,9 +25,10 @@ import dev.gitpockit.ui.GitPockitNavHost
 import javax.inject.Inject
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     @Inject lateinit var settings: SettingsRepository
+    @Inject lateinit var appLock: dev.gitpockit.security.AppLock
 
     private var deepLink by mutableStateOf<DeepLink?>(null)
 
@@ -48,8 +51,21 @@ class MainActivity : ComponentActivity() {
                 }
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
+            val locked by appLock.locked.collectAsStateWithLifecycle()
+            val lockEnabled by appLock.enabled.collectAsStateWithLifecycle()
+            LaunchedEffect(lockEnabled) {
+                // Hide the app's content in the recent-apps screen while the lock is on (Android 13+).
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) setRecentsScreenshotEnabled(!lockEnabled)
+            }
             GitPockitTheme(settings = theme) {
-                GitPockitNavHost(deepLink = deepLink, onDeepLinkHandled = { deepLink = null })
+                androidx.compose.foundation.layout.Box(
+                    androidx.compose.ui.Modifier.fillMaxSize().background(androidx.compose.material3.MaterialTheme.colorScheme.background),
+                ) {
+                    // Settings not read yet: draw nothing rather than flash content that may be locked.
+                    if (locked != null) GitPockitNavHost(deepLink = deepLink, onDeepLinkHandled = { deepLink = null })
+                    // The lock covers the app; navigation state underneath is kept.
+                    if (locked == true) dev.gitpockit.security.LockScreen(onUnlocked = appLock::unlock)
+                }
             }
         }
     }
