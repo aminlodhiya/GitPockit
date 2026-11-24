@@ -15,8 +15,8 @@ android {
         applicationId = "dev.gitpockit"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.2.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // GitHub OAuth App client id for "Sign in with GitHub" (public, not a secret). From the

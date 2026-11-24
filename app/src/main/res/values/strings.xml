@@ -635,4 +635,6 @@
     <string name="lock_prompt_title">Unlock GitPockit</string>
     <string name="lock_prompt_subtitle">Use your fingerprint or screen lock</string>
     <string name="lock_confirm_title">Confirm it\'s you</string>
+    <string name="nested_repo_title">Folders skipped: separate Git repositories</string>
+    <string name="nested_repo_message">These folders have their own .git folder, so their files can\'t be committed here: %1$s. To include their files, delete the .git folder inside them. To keep them separate, add them as submodules instead.</string>
 </resources>

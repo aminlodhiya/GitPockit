@@ -76,6 +76,7 @@ import org.eclipse.jgit.transport.RemoteConfig
 import org.eclipse.jgit.treewalk.TreeWalk
 import org.eclipse.jgit.util.io.NullOutputStream
 import org.eclipse.jgit.lib.Constants
+import org.eclipse.jgit.lib.ObjectId
 import org.eclipse.jgit.lib.PersonIdent
 import org.eclipse.jgit.lib.Repository
 import org.eclipse.jgit.revwalk.RevCommit
@@ -96,7 +97,76 @@ internal class JGitRepository(
 
     init {
         PockitLfs.configure(git.repository)
+        repairInvalidIndexEntries()
     }
+
+    /**
+     * Removes staging-area entries that point at the all-zero object id. JGit (unlike Git) stages a
+     * nested repository that has no commits that way, and afterwards every status/commit fails with
+     * "Missing unknown 0000000…". Files on disk are not touched.
+     */
+    private fun repairInvalidIndexEntries() {
+        runCatching {
+            val zero = ObjectId.zeroId()
+            fun badPaths(dc: org.eclipse.jgit.dircache.DirCache) =
+                (0 until dc.entryCount).map { dc.getEntry(it) }.filter { it.objectId == zero }.map { it.pathString }
+            if (badPaths(repo.readDirCache()).isEmpty()) return@runCatching // common case: no lock needed
+            val dc = repo.lockDirCache()
+            try {
+                val bad = badPaths(dc)
+                if (bad.isNotEmpty()) {
+                    val editor = dc.editor()
+                    bad.forEach { editor.add(DirCacheEditor.DeletePath(it)) }
+                    editor.commit()
+                }
+            } finally {
+                dc.unlock()
+            }
+        }
+    }
+
+    /** Paths of registered submodules (gitlinks in the index or listed in .gitmodules). */
+    private fun submodulePaths(): Set<String> {
+        val fromIndex = repo.readDirCache().let { dc ->
+            (0 until dc.entryCount).map { dc.getEntry(it) }.filter { it.fileMode == FileMode.GITLINK }.map { it.pathString }
+        }
+        val fromFile = File(repo.workTree, ".gitmodules").takeIf { it.isFile }?.let { f ->
+            runCatching {
+                val cfg = org.eclipse.jgit.lib.Config().apply { fromText(f.readText()) }
+                cfg.getSubsections("submodule").mapNotNull { cfg.getString("submodule", it, "path") }
+            }.getOrNull()
+        }.orEmpty()
+        return (fromIndex + fromFile).map { it.trim('/') }.toSet()
+    }
+
+    /** Folders inside the work tree that are separate Git repositories (own .git) but not submodules. */
+    private fun findNestedRepos(): List<String> {
+        val root = repo.workTree
+        val submodules = submodulePaths()
+        val nested = mutableListOf<String>()
+        root.walkTopDown()
+            .onEnter { dir ->
+                if (dir == root) return@onEnter true
+                if (dir.name == ".git") return@onEnter false
+                if (File(dir, ".git").exists()) {
+                    val rel = dir.relativeTo(root).invariantSeparatorsPath
+                    if (rel !in submodules) nested += rel
+                    return@onEnter false // its files belong to that repository
+                }
+                true
+            }
+            .forEach { _ -> }
+        return nested.sorted()
+    }
+
+    private fun isInside(path: String, dirs: Collection<String>) = dirs.any { path == it || path.startsWith("$it/") }
+
+    private fun nestedRepoError(path: String) = GitException(
+        "\"$path\" is a separate Git repository inside this one (it has its own .git folder), so its files can't be " +
+            "committed here. Delete \"$path/.git\" to include its files, or add it as a submodule.",
+    )
+
+    override suspend fun nestedRepositories(): List<String> = engine.io { findNestedRepos() }
 
     override val workTree: File get() = repo.workTree
 
@@ -118,6 +188,9 @@ internal class JGitRepository(
 
     override suspend fun stage(paths: Collection<String>) = engine.io {
         if (paths.isEmpty()) return@io
+        if ("." in paths) return@io stageEverything()
+        val nested = findNestedRepos()
+        paths.firstOrNull { isInside(it, nested) }?.let { throw nestedRepoError(it) }
         val add = git.add()
         paths.forEach(add::addFilepattern)
         add.call()
@@ -138,10 +211,22 @@ internal class JGitRepository(
         Unit
     }
 
-    override suspend fun stageAll() = engine.io {
-        git.add().addFilepattern(".").call()
-        git.add().addFilepattern(".").setUpdate(true).call() // records deletions
-        Unit
+    override suspend fun stageAll() = engine.io { stageEverything() }
+
+    /** `git add -A`, except nested repositories (see [findNestedRepos]), which are left out. */
+    private fun stageEverything() {
+        val nested = findNestedRepos()
+        if (nested.isEmpty()) {
+            git.add().addFilepattern(".").call()
+        } else {
+            val untracked = git.status().call().untracked.filterNot { isInside(it, nested) }
+            if (untracked.isNotEmpty()) {
+                val add = git.add()
+                untracked.forEach(add::addFilepattern)
+                add.call()
+            }
+        }
+        git.add().addFilepattern(".").setUpdate(true).call() // modified and deleted tracked files
     }
 
     override suspend fun commit(message: String, author: GitAuthor, amend: Boolean): CommitInfo = engine.io {
@@ -355,6 +440,9 @@ internal class JGitRepository(
 
     override suspend fun discardChanges(paths: Collection<String>) = engine.io {
         if (paths.isEmpty()) return@io
+        // Never delete another repository's folder as if it were a new file.
+        val nested = findNestedRepos()
+        paths.firstOrNull { isInside(it, nested) }?.let { throw nestedRepoError(it) }
         val headTree = repo.resolve("HEAD^{tree}")
         val (inHead, notInHead) = paths.partition { p ->
             headTree != null && TreeWalk.forPath(repo, p, headTree)?.use { true } == true

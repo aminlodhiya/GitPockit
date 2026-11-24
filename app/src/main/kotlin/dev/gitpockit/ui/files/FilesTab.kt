@@ -114,7 +114,9 @@ class FilesViewModel @Inject constructor(savedState: SavedStateHandle, ops: Repo
                 ops.read(repoId) { repo, git ->
                     val files = RepoFiles(repo.directory)
                     val entries = withContext(Dispatchers.IO) { files.list(dir) }
-                    Triple(entries, git.status().codes(), files.root)
+                    // File badges are optional: a broken status must never hide the files themselves.
+                    val status = runCatching { git.status().codes() }.getOrElse { emptyMap() }
+                    Triple(entries, status, files.root)
                 }
             }.onSuccess { (entries, status, root) ->
                 _state.update { FilesState(true, dir, entries, status, root) }

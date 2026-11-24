@@ -74,8 +74,10 @@ data class ChangesState(
     val message: String = "",
     val amend: Boolean = false,
     val busy: Boolean = false,
+    /** Folders that are separate Git repositories and are skipped when committing. */
+    val nested: List<String> = emptyList(),
 ) {
-    val isClean: Boolean get() = conflicts.isEmpty() && staged.isEmpty() && unstaged.isEmpty()
+    val isClean: Boolean get() = conflicts.isEmpty() && staged.isEmpty() && unstaged.isEmpty() && nested.isEmpty()
 }
 
 @HiltViewModel
@@ -91,8 +93,10 @@ class ChangesViewModel @Inject constructor(
 
     override fun refresh() {
         viewModelScope.launch {
-            runCatching { ops.read(repoId) { _, git -> git.status() } }
-                .onSuccess { st -> _state.update { it.copy(loaded = true).withStatus(st) } }
+            runCatching { ops.read(repoId) { _, git -> git.status() to runCatching { git.nestedRepositories() }.getOrElse { emptyList() } } }
+                .onSuccess { (st, nested) ->
+                    _state.update { it.copy(loaded = true, nested = nested).withStatus(st) }
+                }
                 .onFailure { _state.update { s -> s.copy(loaded = true) }; it.report() }
         }
     }
@@ -108,7 +112,7 @@ class ChangesViewModel @Inject constructor(
             s.modified.forEach { add(FileEntry(it, FileStatus.MODIFIED)) }
             s.missing.forEach { add(FileEntry(it, FileStatus.DELETED)) }
             s.untracked.forEach { add(FileEntry(it, FileStatus.UNTRACKED)) }
-        }.filterNot { it.path in s.conflicting }.sortedBy { it.path },
+        }.filterNot { it.path in s.conflicting || nested.any { n -> it.path == n || it.path.startsWith("$n/") } }.sortedBy { it.path },
     )
 
     fun setMessage(v: String) = _state.update { it.copy(message = v) }
@@ -185,6 +189,26 @@ fun ChangesTab(
 
     Column(Modifier.fillMaxSize().imePadding()) {
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 8.dp)) {
+            if (s.nested.isNotEmpty()) {
+                item(key = "nested") {
+                    androidx.compose.material3.Card(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        colors = androidx.compose.material3.CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        ),
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(stringResource(R.string.nested_repo_title), style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                stringResource(R.string.nested_repo_message, s.nested.joinToString(", ")),
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                    }
+                }
+            }
             if (s.conflicts.isEmpty()) {
                 item(key = "stash") {
                     Row(Modifier.fillMaxWidth().padding(end = 8.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {

@@ -49,8 +49,17 @@ interface GitRepository : AutoCloseable {
 
     suspend fun unstage(paths: Collection<String>)
 
-    /** Stage every change in the work tree, including deletions. */
+    /**
+     * Stage every change in the work tree, including deletions. Folders that are separate Git
+     * repositories (see [nestedRepositories]) are skipped.
+     */
     suspend fun stageAll()
+
+    /**
+     * Folders inside the work tree that are separate Git repositories (their own .git) but not
+     * registered submodules. Their files can't be committed in this repository.
+     */
+    suspend fun nestedRepositories(): List<String>
 
     suspend fun commit(message: String, author: GitAuthor, amend: Boolean = false): CommitInfo
 
