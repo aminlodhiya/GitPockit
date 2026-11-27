@@ -1,0 +1,26 @@
+# F-Droid build recipe. Submit it as metadata/dev.gitpockit.yml in
+# https://gitlab.com/fdroid/fdroiddata (see fdroid/README.md).
+Categories:
+  - Development
+License: GPL-3.0-only
+SourceCode: https://github.com/aminlodhiya/GitPockit
+IssueTracker: https://github.com/aminlodhiya/GitPockit/issues
+Changelog: https://github.com/aminlodhiya/GitPockit/releases
+
+AutoName: GitPockit
+
+RepoType: git
+Repo: https://github.com/aminlodhiya/GitPockit.git
+
+Builds:
+  - versionName: 1.2.1
+    versionCode: 4
+    commit: v1.2.1
+    subdir: app
+    gradle:
+      - standard
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: 1.2.1
+CurrentVersionCode: 4

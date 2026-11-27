@@ -1,1 +1,1 @@
-Git in your pocket. Sync any folder with a Git repository.
+Git client and folder sync: commit, pull and push from your phone

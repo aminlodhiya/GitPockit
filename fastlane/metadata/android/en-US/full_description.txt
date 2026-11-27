@@ -1,10 +1,35 @@
-GitPockit is a free, open-source Git client for Android.
+GitPockit is a free, open-source Git client for Android. Keep notes, an Obsidian vault, documents or code on your phone in sync with any Git repository: GitHub, GitLab, Gitea, Codeberg or your own server.
 
-Keep notes, an Obsidian vault, documents or code on your phone in sync with any Git repository, on GitHub, GitLab, Gitea or your own server.
+<b>Sync any folder</b>
+• Clone a repository, or turn an existing folder on your phone into one
+• One-tap sync: commit, pull and push together
+• Automatic sync on a schedule (per repository, including exact times of day)
+• Sync from a Quick Settings tile, a home-screen widget or automation apps (Tasker, Automate)
+• Works offline: commit any time, and pushes happen when you're back online
+• Conflict resolution with a clear side-by-side view
 
-• Clone over HTTPS or SSH
-• Commit, pull, push, or sync everything with one tap
-• See changes, history and ahead/behind status
+<b>All of Git</b>
+• HTTPS and SSH (generate or import Ed25519 and RSA keys)
+• Stage files, hunks or single lines; commit and amend
+• Branches, tags, remotes, stash
+• Merge, rebase, cherry-pick, revert, reset
+• History graph, search, blame, reflog and file history
+• Submodules and Git LFS
+• Signed commits (SSH and OpenPGP)
+
+<b>Files and editor</b>
+• File browser with a code editor and syntax highlighting
+• Markdown and image preview
+• Edit .gitignore from the app
+
+<b>GitHub</b>
+• Browse issues, pull requests and Actions runs
+• Comment, even offline; comments are sent when you reconnect
+
+<b>Private and secure</b>
+• No ads, no tracking, no analytics
+• Passwords, tokens and keys are encrypted on the device
+• Optional app lock with fingerprint
+
+<b>Looks good</b>
 • Premium dark theme, simple light theme and AMOLED black
-
-GitPockit is in early development. Automatic background sync, conflict resolution, branches, stash, rebase and much more are on the way.

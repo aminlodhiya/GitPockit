@@ -1,0 +1,2 @@
+• Fixed: adding a folder that contains another Git repository could break the repository ("Missing unknown 0000…") and make the Files tab look empty. Affected repositories repair themselves when opened.
+• Folders that are separate Git repositories are now skipped when committing, with a warning explaining how to include them.

@@ -26,7 +26,10 @@ android {
             rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
         }
         val githubClientId = System.getenv("GITPOCKIT_GITHUB_CLIENT_ID")?.takeIf { it.isNotBlank() }
-            ?: localProps.getProperty("gitpockit.githubClientId", "")
+            ?: localProps.getProperty("gitpockit.githubClientId")?.takeIf { it.isNotBlank() }
+            // Committed default (gradle.properties), so builds from source such as F-Droid's get it too.
+            // A GitHub OAuth client id is public; the device flow uses no client secret.
+            ?: (project.findProperty("gitpockit.githubClientId") as String?).orEmpty()
         buildConfigField("String", "GITHUB_CLIENT_ID", "\"$githubClientId\"")
     }
 
